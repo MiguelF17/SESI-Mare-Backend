@@ -1,0 +1,16 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Musica {
+  id        Int      @id @default(autoincrement())
+  titulo      String
+  artista     String
+  genero      String
+  duracaoSegundos Int
+}

@@ -1,0 +1,5 @@
+-- CreateTable
+CREATE TABLE "Musica" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "titulo" TEXT NOT NULL
+);
