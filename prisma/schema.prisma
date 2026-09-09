@@ -17,6 +17,11 @@ model Usuario {
   dataCadastro DateTime @default(now())
 
   posts Post[]
+  curtidas Curtida[]
+  comentarios Comentario[]
+  seguindo  Seguidor[] @relation("seguindo")
+seguidores Seguidor[] @relation("seguidores")
+salvamentos Salvamento[]
 }
 
 model Musica {
@@ -30,6 +35,7 @@ model Musica {
   spotifyUrl       String?
 
   posts Post[]
+  salvamentos Salvamento[]
 }
 
 model Post {
@@ -40,6 +46,55 @@ model Post {
   texto     String
   dataCriacao DateTime @default(now())
 
+  curtidas Curtida[]
+  comentarios Comentario[]
+
   usuario Usuario @relation(fields: [usuarioId], references: [id])
   musica  Musica  @relation(fields: [musicaId], references: [id])
+
+  @@unique([usuarioId, musicaId])
+}
+
+model Curtida {
+  usuarioId   Int
+  postId      Int
+  dataCriacao DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  post    Post    @relation(fields: [postId], references: [id])
+
+  @@id([usuarioId, postId])
+}
+
+model Comentario {
+  id          Int      @id @default(autoincrement())
+  usuarioId   Int
+  postId      Int
+  texto       String
+  dataCriacao DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  post    Post    @relation(fields: [postId], references: [id])
+}
+
+model Seguidor {
+  seguidorId Int
+  seguidoId  Int
+  dataCriacao DateTime @default(now())
+
+  seguidor Usuario @relation("seguindo", fields: [seguidorId], references: [id])
+  seguido  Usuario @relation("seguidores", fields: [seguidoId], references: [id])
+
+  @@id([seguidorId, seguidoId])
+}
+
+model Salvamento {
+  usuarioId   Int
+  musicaId    Int
+  dataCriacao DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  musica  Musica  @relation(fields: [musicaId], references: [id])
+
+  @@id([usuarioId, musicaId])
 }

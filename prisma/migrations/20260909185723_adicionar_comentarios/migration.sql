@@ -1,0 +1,10 @@
+-- CreateTable
+CREATE TABLE "Comentario" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "usuarioId" INTEGER NOT NULL,
+    "postId" INTEGER NOT NULL,
+    "texto" TEXT NOT NULL,
+    "dataCriacao" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Comentario_usuarioId_fkey" FOREIGN KEY ("usuarioId") REFERENCES "Usuario" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "Comentario_postId_fkey" FOREIGN KEY ("postId") REFERENCES "Post" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
