@@ -25,17 +25,26 @@ salvamentos Salvamento[]
 }
 
 model Musica {
-  id        Int      @id @default(autoincrement())
-  spotifyId String?  @unique
-  titulo      String
-  artista     String
-  genero      String
+  id              Int     @id @default(autoincrement())
+  spotifyId       String? @unique
+  titulo          String
+  artistaId       Int
+  genero          String
   duracaoSegundos Int
-  capa             String?
-  spotifyUrl       String?
+  capa            String?
+  spotifyUrl      String?
 
-  posts Post[]
+  artista     Artista @relation(fields: [artistaId], references: [id])
+  posts       Post[]
   salvamentos Salvamento[]
+}
+
+model Artista {
+  id    Int     @id @default(autoincrement())
+  nome  String
+  fotoURL  String?
+
+  musicas Musica[]
 }
 
 model Post {
@@ -61,7 +70,7 @@ model Curtida {
   dataCriacao DateTime @default(now())
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
-  post    Post    @relation(fields: [postId], references: [id])
+post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@id([usuarioId, postId])
 }
@@ -74,7 +83,7 @@ model Comentario {
   dataCriacao DateTime @default(now())
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
-  post    Post    @relation(fields: [postId], references: [id])
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
 model Seguidor {

@@ -6,6 +6,7 @@ import curtidaRoutes from "./routes/curtidaRoutes"
 import comentarioRoutes from "./routes/comentarioRoutes"
 import seguidorRoutes from "./routes/seguidorRoutes"
 import salvamentoRoutes from "./routes/salvamentoRoutes"
+import artistaRoutes from "./routes/artistaRoutes"
 import "dotenv/config";
 
 
@@ -19,6 +20,7 @@ app.use("/api", curtidaRoutes)
 app.use("/api", comentarioRoutes)
 app.use("/api", seguidorRoutes)
 app.use("/api", salvamentoRoutes)
+app.use("/api", artistaRoutes)
 
 
 app.listen(3000, () => {
