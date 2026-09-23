@@ -59,9 +59,8 @@ router.post("/musicas", async (req: Request, res: Response) => {
   }
 });
 
-// Buscar a musica
+// Buscar músicas
 router.get("/musicas", async (req: Request, res: Response) => {
-  // Função na qual busca a música com base no artista ou titulo
   try {
     const search = req.query.search as string | undefined;
 
@@ -76,17 +75,23 @@ router.get("/musicas", async (req: Request, res: Response) => {
               },
               {
                 artista: {
-                  contains: search,
+                  nome: {
+                    contains: search,
+                  },
                 },
               },
             ],
           }
         : undefined,
+
+      include: {
+        artista: true,
+      },
     });
 
     return res.status(200).json(musicas);
   } catch (error) {
-    console.error("Erro ao listar musicas", error);
+    console.error("Erro ao listar músicas", error);
 
     return res.status(500).json({
       error: "Erro interno",
@@ -101,6 +106,9 @@ router.get("/musicas/:id", async (req: Request, res: Response) => {
     const musica = await prisma.musica.findUnique({
       where: {
         id: id,
+      },
+      include: {
+        artista: true,
       },
     });
 

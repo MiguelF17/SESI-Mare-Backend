@@ -70,3 +70,4 @@ export function optionalAuthMiddleware(
 
 	next();
 }
+export default authMiddleware

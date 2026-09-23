@@ -16,12 +16,14 @@ model Usuario {
   bio          String?
   dataCadastro DateTime @default(now())
 
-  posts Post[]
-  curtidas Curtida[]
-  comentarios Comentario[]
-  seguindo  Seguidor[] @relation("seguindo")
-seguidores Seguidor[] @relation("seguidores")
-salvamentos Salvamento[]
+  posts             Post[]
+  curtidas          Curtida[]
+  comentarios       Comentario[]
+  seguindo          Seguidor[]       @relation("seguindo")
+  seguidores        Seguidor[]       @relation("seguidores")
+  salvamentos       Salvamento[]
+  artistasFavoritos UsuarioArtista[]
+  generosFavoritos  UsuarioGenero[]
 }
 
 model Musica {
@@ -34,28 +36,29 @@ model Musica {
   capa            String?
   spotifyUrl      String?
 
-  artista     Artista @relation(fields: [artistaId], references: [id])
+  artista     Artista      @relation(fields: [artistaId], references: [id])
   posts       Post[]
   salvamentos Salvamento[]
 }
 
 model Artista {
-  id    Int     @id @default(autoincrement())
-  nome  String
-  fotoURL  String?
+  id      Int     @id @default(autoincrement())
+  nome    String
+  fotoURL String?
 
-  musicas Musica[]
+  musicas           Musica[]
+  usuariosFavoritos UsuarioArtista[]
 }
 
 model Post {
-   id        Int      @id @default(autoincrement())
-  usuarioId Int
-  musicaId  Int
-  nota      Float
-  texto     String
+  id          Int      @id @default(autoincrement())
+  usuarioId   Int
+  musicaId    Int
+  nota        Float
+  texto       String
   dataCriacao DateTime @default(now())
 
-  curtidas Curtida[]
+  curtidas    Curtida[]
   comentarios Comentario[]
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
@@ -70,7 +73,7 @@ model Curtida {
   dataCriacao DateTime @default(now())
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
-post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@id([usuarioId, postId])
 }
@@ -83,12 +86,12 @@ model Comentario {
   dataCriacao DateTime @default(now())
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
 model Seguidor {
-  seguidorId Int
-  seguidoId  Int
+  seguidorId  Int
+  seguidoId   Int
   dataCriacao DateTime @default(now())
 
   seguidor Usuario @relation("seguindo", fields: [seguidorId], references: [id])
@@ -106,4 +109,23 @@ model Salvamento {
   musica  Musica  @relation(fields: [musicaId], references: [id])
 
   @@id([usuarioId, musicaId])
+}
+
+model UsuarioArtista {
+  usuarioId Int
+  artistaId Int
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  artista Artista @relation(fields: [artistaId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, artistaId])
+}
+
+model UsuarioGenero {
+  usuarioId Int
+  genero    String
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, genero])
 }

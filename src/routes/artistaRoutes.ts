@@ -53,4 +53,35 @@ router.get("/artistas", async (req: Request, res: Response) => {
     }
 })
 
+// Buscar um artista pelo ID
+router.get("/artistas/:id", async (req: Request, res: Response) => {
+    try {
+        const id = Number(req.params.id)
+
+        const artista = await prisma.artista.findUnique({
+            where: {
+                id
+            },
+            include: {
+                musicas: true
+            }
+        })
+
+        if (!artista) {
+            return res.status(404).json({
+                error: "Artista não encontrado"
+            })
+        }
+
+        return res.status(200).json(artista)
+
+    } catch (error) {
+        console.error("Erro ao buscar artista", error)
+
+        return res.status(500).json({
+            error: "Erro interno"
+        })
+    }
+})
+
 export default router
