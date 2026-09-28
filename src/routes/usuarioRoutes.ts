@@ -9,12 +9,12 @@ const router = Router();
 router.post("/usuarios", async (req: Request, res: Response) => {
   try {
     // Pega os dados enviados pelo frontend
-    const { nome, email, senha } = req.body;
+    const { username, email, senha } = req.body;
 
     // Verifica se os campos obrigatórios foram preenchidos
-    if (!nome || !email || !senha) {
+    if (!username || !email || !senha) {
       return res.status(400).json({
-        error: "Informe nome, email e senha",
+        error: "Informe username, email e senha",
       });
     }
 
@@ -39,7 +39,7 @@ router.post("/usuarios", async (req: Request, res: Response) => {
     // Cria o usuário no banco
     const usuario = await prisma.usuario.create({
       data: {
-        nome,
+        username,
         email: emailNormalizado,
         senhaHash,
       },
@@ -48,7 +48,7 @@ router.post("/usuarios", async (req: Request, res: Response) => {
     // Não devolvemos a senha/hash para o frontend
     return res.status(201).json({
       id: usuario.id,
-      nome: usuario.nome,
+      username: usuario.username,
       email: usuario.email,
     });
   } catch (error) {
@@ -63,23 +63,23 @@ router.post("/usuarios", async (req: Request, res: Response) => {
 // LOGAR USUÁRIO
 router.post("/login", async (req: Request, res: Response) => {
   try {
-    const { nome, email, senha } = req.body;
+    const { username, email, senha } = req.body;
 
-    if ((!email && !nome) || !senha) {
+    if ((!email && !username) || !senha) {
       return res.status(400).json({
-        error: "Informe nome ou email, e senha",
+        error: "Informe username ou email, e senha",
       });
     }
 
     const usuario = await prisma.usuario.findFirst({
       where: {
-        OR: [{ email: email }, { nome: nome }],
+        OR: [{ email: email }, { username: username }],
       },
     });
 
     if (!usuario) {
       return res.status(401).json({
-        error: "Usuário, email ou senha incorretos",
+        error: "Username, email ou senha incorretos",
       });
     }
 
@@ -87,7 +87,7 @@ router.post("/login", async (req: Request, res: Response) => {
 
     if (!senhaValida) {
       return res.status(401).json({
-        error: "Usuário, email ou senha incorretos",
+        error: "Username, email ou senha incorretos",
       });
     }
 
@@ -106,7 +106,7 @@ router.post("/login", async (req: Request, res: Response) => {
       token,
       usuario: {
         id: usuario.id,
-        nome: usuario.nome,
+        username: usuario.username,
         email: usuario.email,
       },
     });
@@ -125,7 +125,7 @@ router.get("/usuarios", async (req: Request, res: Response) => {
     const usuarios = await prisma.usuario.findMany({
       select: {
         id: true,
-        nome: true,
+        username: true,
         email: true,
       },
     });
