@@ -63,17 +63,17 @@ router.post("/usuarios", async (req: Request, res: Response) => {
 // LOGAR USUÁRIO
 router.post("/login", async (req: Request, res: Response) => {
   try {
-    const { username, email, senha } = req.body;
+    const { login, senha } = req.body;
 
-    if ((!email && !username) || !senha) {
+    if (!login || !senha) {
       return res.status(400).json({
-        error: "Informe username ou email, e senha",
+        error: "Informe email ou usuário, e senha",
       });
     }
 
     const usuario = await prisma.usuario.findFirst({
       where: {
-        OR: [{ email: email }, { username: username }],
+        OR: [{ email: login }, { username: login }],
       },
     });
 

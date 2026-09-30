@@ -9,6 +9,7 @@ import salvamentoRoutes from "./routes/salvamentoRoutes";
 import artistaRoutes from "./routes/artistaRoutes";
 import usuarioGeneroRoutes from "./routes/usuarioGeneroRoutes"
 import usuarioArtistaRoutes from "./routes/usuárioArtistaRoutes"
+import spotifyRoutes from "./routes/spotifyRoutes";
 import "dotenv/config";
 import cors from "cors";
 
@@ -33,7 +34,8 @@ app.use("/", salvamentoRoutes);
 app.use("/", artistaRoutes);
 app.use("/", usuarioArtistaRoutes)
 app.use("/", usuarioGeneroRoutes)
+app.use(spotifyRoutes);
 
-app.listen(3000, () => {
+app.listen(3000, "0.0.0.0", () => {
   console.log("Servidor rodando na porta 3000");
 });
