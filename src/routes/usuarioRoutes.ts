@@ -108,6 +108,7 @@ router.post("/login", async (req: Request, res: Response) => {
         id: usuario.id,
         username: usuario.username,
         email: usuario.email,
+        nome: usuario.nome
       },
     });
   } catch (error) {
