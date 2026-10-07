@@ -35,10 +35,12 @@ export function authMiddleware(
 
 		next();
 	} catch (error) {
-		return res.status(401).json({
-			error: "Token inválido ou expirado",
-		});
-	}
+    console.error("ERRO JWT:", error);
+
+    return res.status(401).json({
+      error: "Token inválido ou expirado",
+    });
+  }
 }
 
 export function optionalAuthMiddleware(
