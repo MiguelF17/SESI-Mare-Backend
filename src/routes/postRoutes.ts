@@ -170,6 +170,97 @@ router.get(
   },
 );
 
+// BUSCAR UM POST PELO ID
+router.get(
+  "/posts/:id",
+  optionalAuthMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: "ID inválido" });
+      }
+
+      const post = await prisma.post.findUnique({
+        where: { id },
+        include: {
+          usuario: {
+            select: {
+              id: true,
+              nome: true,
+              username: true,
+              foto: true,
+            },
+          },
+          musica: {
+            include: {
+              artista: true,
+              posts: {
+                select: { nota: true },
+              },
+            },
+          },
+          _count: {
+            select: {
+              curtidas: true,
+              comentarios: true,
+            },
+          },
+        },
+      });
+
+      if (!post) {
+        return res.status(404).json({
+          error: "Post não encontrado",
+        });
+      }
+
+      const quantidadeAvaliacoes = post.musica.posts.length;
+
+      const media =
+        quantidadeAvaliacoes > 0
+          ? post.musica.posts.reduce(
+              (total, avaliacao) => total + avaliacao.nota,
+              0
+            ) / quantidadeAvaliacoes
+          : 0;
+
+      let curtidoPorMim = false;
+
+      if (req.usuarioId) {
+        const curtida = await prisma.curtida.findUnique({
+          where: {
+            usuarioId_postId: {
+              usuarioId: req.usuarioId,
+              postId: post.id,
+            },
+          },
+        });
+
+        curtidoPorMim = !!curtida;
+      }
+
+      return res.status(200).json({
+        ...post,
+        curtidoPorMim,
+        musica: {
+          ...post.musica,
+          nota: Number(media.toFixed(1)),
+          avaliacoes: quantidadeAvaliacoes,
+          posts: undefined,
+        },
+      });
+    } catch (error) {
+      console.error("Erro ao buscar post:", error);
+
+      return res.status(500).json({
+        error: "Erro interno",
+      });
+    }
+  }
+);
+
 // BUSCAR MINHAS AVALIAÇÕES
 router.get(
   "/usuarios/me/posts",
