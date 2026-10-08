@@ -128,10 +128,9 @@ router.get(
           musica: {
             include: {
               artista: true,
-
-              _count: {
+              posts: {
                 select: {
-                  posts: true,
+                  nota: true,
                 },
               },
             },

@@ -67,10 +67,21 @@ router.get(
   optionalAuthMiddleware,
   async (req: AuthRequest, res: Response) => {
     try {
+      const musicaId = req.query.musicaId
+        ? Number(req.query.musicaId)
+        : undefined;
+
       const posts = await prisma.post.findMany({
+        where: musicaId
+          ? {
+            musicaId,
+          }
+          : undefined,
+
         orderBy: {
           dataCriacao: "desc",
         },
+
         include: {
           usuario: {
             select: {
@@ -80,20 +91,27 @@ router.get(
               foto: true,
             },
           },
+
           musica: {
             include: {
               artista: true,
+              posts: {
+                select: {
+                  nota: true,
+                },
+              },
             },
           },
+
           _count: {
             select: {
               curtidas: true,
+              comentarios: true,
             },
           },
         },
       });
 
-      // Verifica se a pessoa que está vendo o post é a mesma que curtiu
       const postsComCurtida = await Promise.all(
         posts.map(async (post) => {
           let curtidoPorMim = false;
@@ -118,7 +136,30 @@ router.get(
         }),
       );
 
-      return res.status(200).json(postsComCurtida);
+      const postsFormatados = postsComCurtida.map((post) => {
+        const quantidadeAvaliacoes = post.musica.posts.length;
+
+        const media =
+          quantidadeAvaliacoes > 0
+            ? post.musica.posts.reduce(
+              (total, avaliacao) => total + avaliacao.nota,
+              0
+            ) / quantidadeAvaliacoes
+            : 0;
+
+        return {
+          ...post,
+
+          musica: {
+            ...post.musica,
+            nota: Number(media.toFixed(1)),
+            avaliacoes: quantidadeAvaliacoes,
+            posts: undefined,
+          },
+        };
+      });
+
+      return res.status(200).json(postsFormatados);
     } catch (error) {
       console.error("Erro ao listar posts", error);
 
@@ -159,6 +200,11 @@ router.get(
           musica: {
             include: {
               artista: true,
+              posts: {
+                select: {
+                  nota: true,
+                },
+              },
             },
           },
 
