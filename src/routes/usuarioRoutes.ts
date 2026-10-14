@@ -3,8 +3,83 @@ import bcrypt from "bcryptjs";
 import prisma from "../prismaClient";
 import jwt from "jsonwebtoken";
 import authMiddleware, { AuthRequest } from "../middleware/authMiddleware";
+import multer from "multer";
+import cloudinary from "../cloudinary";
 
 const router = Router();
+
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5 MB
+  },
+  fileFilter: (_req, file, callback) => {
+    if (!file.mimetype.startsWith("image/")) {
+      return callback(new Error("Envie um arquivo de imagem."));
+    }
+
+    callback(null, true);
+  },
+});
+
+// ATUALIZAR FOTO OU CAPA DO PERFIL
+router.patch(
+  "/usuarios/me/imagem",
+  authMiddleware,
+  upload.single("imagem"),
+
+  async (req: AuthRequest, res: Response) => {
+    try {
+      
+      const usuarioId = req.usuarioId!;
+      const { tipo } = req.body;
+
+      console.log(req)
+      console.log("Arquivo recebido:", req.file);
+      console.log("Campos recebidos:", req.body);
+
+      if (!req.file) {
+        return res.status(400).json({
+          erro: "Nenhuma imagem foi enviada.",
+        });
+      }
+
+      if (tipo !== "foto" && tipo !== "capa") {
+        return res.status(400).json({
+          erro: "O tipo deve ser foto ou capa.",
+        });
+      }
+
+      const resultado = await cloudinary.uploader.upload(
+        `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`,
+        {
+          folder: "mare/perfis",
+        }
+      );
+
+      const usuario = await prisma.usuario.update({
+        where: { id: usuarioId },
+        data: {
+          [tipo]: resultado.secure_url,
+        },
+        select: {
+          id: true,
+          foto: true,
+          capa: true,
+        },
+      });
+
+      return res.json(usuario);
+    } catch (erro) {
+      console.error("Erro ao atualizar imagem:", erro);
+
+      return res.status(500).json({
+        erro: "Não foi possível atualizar a imagem.",
+      });
+    }
+  }
+);
 
 // CADASTRAR USUÁRIO
 router.post("/usuarios", async (req: Request, res: Response) => {
