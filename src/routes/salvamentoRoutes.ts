@@ -108,45 +108,57 @@ router.delete(
 );
 
 // Listar músicas salvas pelo usuário
-router.get(
-  "/usuarios/me/salvos",
-  authMiddleware,
-  async (req: AuthRequest, res: Response) => {
-    try {
-      const usuarioId = req.usuarioId!;
 
-      const salvos = await prisma.salvamento.findMany({
-        where: {
-          usuarioId,
-        },
+router.get("/usuarios/me/salvos", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const usuarioId = req.usuarioId!;
 
-        orderBy: {
-          dataCriacao: "desc",
-        },
-
-        include: {
-          musica: {
-            include: {
-              artista: true,
-              posts: {
-                select: {
-                  nota: true,
-                },
-              },
+    const salvos = await prisma.salvamento.findMany({
+      where: { usuarioId },
+      orderBy: { dataCriacao: "desc" },
+      include: {
+        musica: {
+          include: {
+            artista: true,
+            posts: {
+              select: { nota: true },
             },
           },
         },
-      });
+      },
+    });
 
-      return res.status(200).json(salvos);
-    } catch (error) {
-      console.error("Erro ao listar músicas salvas", error);
+    const resultado = salvos.map((salvamento) => {
+      const musica = salvamento.musica;
+      const posts = musica.posts;
+      const notas = posts
+        .map((post) => post.nota)
+        .filter((nota): nota is number => nota !== null);
 
-      return res.status(500).json({
-        error: "Erro interno",
-      });
-    }
-  },
-);
+      const notaMedia = notas.length > 0
+        ? notas.reduce((soma, nota) => soma + nota, 0) / notas.length
+        : 0;
+
+      const { posts: _posts, ...dadosMusica } = musica;
+
+      return {
+        ...salvamento,
+        musica: {
+          ...dadosMusica,
+          nota: notaMedia,
+          _count: {
+            posts: posts.length,
+          },
+        },
+      };
+    });
+
+    return res.status(200).json(resultado);
+  } catch (error) {
+    console.error("Erro ao buscar músicas salvas:", error);
+    return res.status(500).json({ error: "Erro interno" });
+  }
+});
+
 
 export default router;

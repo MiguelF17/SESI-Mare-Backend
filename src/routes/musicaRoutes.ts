@@ -14,6 +14,9 @@ router.post("/musicas", async (req: Request, res: Response) => {
       capa,
       spotifyUrl,
       spotifyId,
+      appleMusicUrl,
+      amazonMusicUrl,
+      youtubeMusicUrl,
     } = req.body;
 
     if (!titulo || !artistaId || !genero || !duracaoSegundos) {
@@ -43,6 +46,9 @@ router.post("/musicas", async (req: Request, res: Response) => {
         capa,
         spotifyUrl,
         spotifyId,
+        appleMusicUrl,
+        amazonMusicUrl,
+        youtubeMusicUrl,
       },
       include: {
         artista: true,
@@ -67,21 +73,21 @@ router.get("/musicas", async (req: Request, res: Response) => {
     const musicas = await prisma.musica.findMany({
       where: search
         ? {
-            OR: [
-              {
-                titulo: {
+          OR: [
+            {
+              titulo: {
+                contains: search,
+              },
+            },
+            {
+              artista: {
+                nome: {
                   contains: search,
                 },
               },
-              {
-                artista: {
-                  nome: {
-                    contains: search,
-                  },
-                },
-              },
-            ],
-          }
+            },
+          ],
+        }
         : undefined,
 
       include: {
@@ -107,7 +113,7 @@ router.get("/musicas", async (req: Request, res: Response) => {
       const media =
         quantidadeAvaliacoes > 0
           ? musica.posts.reduce((total, post) => total + post.nota, 0) /
-            quantidadeAvaliacoes
+          quantidadeAvaliacoes
           : 0;
 
       return {
@@ -118,6 +124,9 @@ router.get("/musicas", async (req: Request, res: Response) => {
         capa: musica.capa,
         spotifyUrl: musica.spotifyUrl,
         spotifyId: musica.spotifyId,
+        appleMusicUrl: musica.appleMusicUrl,
+        amazonMusicUrl: musica.amazonMusicUrl,
+        youtubeMusicUrl: musica.youtubeMusicUrl,
 
         artista: musica.artista,
 
@@ -167,7 +176,7 @@ router.get("/musicas/:id", async (req: Request, res: Response) => {
     const media =
       quantidadeAvaliacoes > 0
         ? musica.posts.reduce((total, post) => total + post.nota, 0) /
-          quantidadeAvaliacoes
+        quantidadeAvaliacoes
         : 0;
 
     return res.status(200).json({
@@ -178,6 +187,9 @@ router.get("/musicas/:id", async (req: Request, res: Response) => {
       capa: musica.capa,
       spotifyUrl: musica.spotifyUrl,
       spotifyId: musica.spotifyId,
+      appleMusicUrl: musica.appleMusicUrl,
+      amazonMusicUrl: musica.amazonMusicUrl,
+      youtubeMusicUrl: musica.youtubeMusicUrl,
 
       artista: musica.artista,
 
@@ -206,6 +218,9 @@ router.put("/musicas/:id", async (req: Request, res: Response) => {
       capa,
       spotifyUrl,
       spotifyId,
+      appleMusicUrl,
+      amazonMusicUrl,
+      youtubeMusicUrl,
     } = req.body;
 
     // Verifica se a música existe
@@ -250,6 +265,9 @@ router.put("/musicas/:id", async (req: Request, res: Response) => {
         capa,
         spotifyUrl,
         spotifyId,
+        appleMusicUrl,
+        amazonMusicUrl,
+        youtubeMusicUrl,
       },
       include: {
         artista: true,

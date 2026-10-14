@@ -36,7 +36,11 @@ model Musica {
   genero          String
   duracaoSegundos Int
   capa            String?
+  
   spotifyUrl      String?
+    appleMusicUrl   String?
+  amazonMusicUrl  String?
+  youtubeMusicUrl String?
 
   artista     Artista      @relation(fields: [artistaId], references: [id])
   posts       Post[]
