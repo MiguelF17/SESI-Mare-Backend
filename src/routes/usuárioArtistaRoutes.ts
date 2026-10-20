@@ -11,47 +11,76 @@ router.post(
   authMiddleware,
   async (req: AuthRequest, res: Response) => {
     try {
-      // Pega o ID do usuário que está logado
       const usuarioId = req.usuarioId!;
+      const { artistaIds } = req.body;
 
-      const { artistaId } = req.body;
-
-      if (!artistaId) {
+      if (
+        !Array.isArray(artistaIds) ||
+        artistaIds.length === 0 ||
+        artistaIds.some(
+          (id) => !Number.isInteger(Number(id)) || Number(id) <= 0
+        )
+      ) {
         return res.status(400).json({
-          error: "Informe o artista",
+          error: "Envie uma lista válida de artistas.",
         });
       }
 
-      // Verifica se o artista existe
-      const artista = await prisma.artista.findUnique({
+      const ids = [...new Set(artistaIds.map(Number))];
+
+      const artistasExistentes = await prisma.artista.findMany({
         where: {
-          id: Number(artistaId),
+          id: { in: ids },
+        },
+        select: {
+          id: true,
         },
       });
 
-      if (!artista) {
-        return res.status(404).json({
-          error: "Artista não encontrado",
+      if (artistasExistentes.length !== ids.length) {
+        return res.status(400).json({
+          error: "Um ou mais artistas não foram encontrados.",
         });
       }
 
-      // Salva a preferência
-      const favorito = await prisma.usuarioArtista.create({
-        data: {
+      const favoritosExistentes = await prisma.usuarioArtista.findMany({
+        where: {
           usuarioId,
-          artistaId: Number(artistaId),
+          artistaId: { in: ids },
+        },
+        select: {
+          artistaId: true,
         },
       });
 
-      return res.status(201).json(favorito);
+      const idsExistentes = new Set(
+        favoritosExistentes.map((item) => item.artistaId)
+      );
+
+      const novosFavoritos = ids
+        .filter((id) => !idsExistentes.has(id))
+        .map((artistaId) => ({
+          usuarioId,
+          artistaId,
+        }));
+
+      if (novosFavoritos.length > 0) {
+        await prisma.usuarioArtista.createMany({
+          data: novosFavoritos,
+        });
+      }
+
+      return res.status(201).json({
+        message: "Artistas favoritos salvos com sucesso.",
+      });
     } catch (error) {
-      console.error("Erro ao salvar artista favorito", error);
+      console.error("Erro ao salvar artistas favoritos:", error);
 
       return res.status(500).json({
-        error: "Erro interno",
+        error: "Não foi possível salvar os artistas favoritos.",
       });
     }
-  },
+  }
 );
 
 // Listar os artistas favoritos do usuário

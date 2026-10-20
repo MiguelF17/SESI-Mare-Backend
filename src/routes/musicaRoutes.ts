@@ -145,6 +145,39 @@ router.get("/musicas", async (req: Request, res: Response) => {
   }
 });
 
+
+/* Buscar os gêneros que existem no catálogo */
+router.get("/musicas/generos", async (_req: Request, res: Response) => {
+  try {
+    const registros = await prisma.musica.findMany({
+      select: {
+        genero: true,
+      },
+      distinct: ["genero"],
+      orderBy: {
+        genero: "asc",
+      },
+    });
+
+    const generos = [
+      ...new Set(
+        registros
+          .map((registro) => registro.genero?.trim())
+          .filter((genero): genero is string => Boolean(genero))
+      ),
+    ].sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+    return res.status(200).json({ generos });
+  } catch (error) {
+    console.error("Erro ao listar gêneros:", error);
+
+    return res.status(500).json({
+      error: "Não foi possível carregar os gêneros.",
+    });
+  }
+});
+
+
 router.get("/musicas/:id", async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
