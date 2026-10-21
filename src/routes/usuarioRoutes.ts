@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import prisma from "../prismaClient";
 import jwt from "jsonwebtoken";
-import authMiddleware, { AuthRequest } from "../middleware/authMiddleware";
+import { authMiddleware, optionalAuthMiddleware, AuthRequest } from "../middleware/authMiddleware";
 import multer from "multer";
 import cloudinary from "../cloudinary";
 
@@ -217,6 +217,100 @@ router.get("/usuarios", async (req: Request, res: Response) => {
     });
   }
 });
+
+// BUSCAR PERFIL PÚBLICO PELO USERNAME
+router.get(
+  "/usuarios/publico/:username",
+  optionalAuthMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const username = String(req.params.username);
+      const usuarioLogadoId = req.usuarioId;
+
+      const usuario = await prisma.usuario.findUnique({
+        where: {
+          username: username,
+        },
+        select: {
+          id: true,
+          nome: true,
+          username: true,
+          foto: true,
+          capa: true,
+          bio: true,
+
+          _count: {
+            select: {
+              seguidores: true,
+              seguindo: true,
+              posts: true,
+            },
+          },
+
+          posts: {
+            orderBy: {
+              dataCriacao: "desc",
+            },
+            include: {
+              usuario: {
+                select: {
+                  id: true,
+                  nome: true,
+                  username: true,
+                  foto: true,
+                },
+              },
+              musica: {
+                include: {
+                  artista: true,
+                  _count: {
+                    select: {
+                      posts: true,
+                    },
+                  },
+                },
+              },
+              _count: {
+                select: {
+                  curtidas: true,
+                  comentarios: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!usuario) {
+        return res.status(404).json({
+          error: "Usuário não encontrado",
+        });
+      }
+
+      const seguindoPorMim = usuarioLogadoId
+        ? !!(await prisma.seguidor.findUnique({
+          where: {
+            seguidorId_seguidoId: {
+              seguidorId: usuarioLogadoId,
+              seguidoId: usuario.id,
+            },
+          },
+        }))
+        : false;
+
+      return res.status(200).json({
+        ...usuario,
+        seguindoPorMim,
+      });
+    } catch (error) {
+      console.error("Erro ao buscar perfil público:", error);
+
+      return res.status(500).json({
+        error: "Erro interno",
+      });
+    }
+  },
+);
 
 // BUSCAR MEU PERFIL
 router.get(
