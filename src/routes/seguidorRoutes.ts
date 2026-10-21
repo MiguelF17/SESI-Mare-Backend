@@ -131,10 +131,11 @@ router.get(
                         select: {
                             id: true,
                             nome: true,
-                            foto: true
-                        }
-                    }
-                }
+                            username: true,
+                            foto: true,
+                        },
+                    },
+                },
             })
 
             return res.status(200).json(seguidores)
@@ -165,10 +166,11 @@ router.get(
                         select: {
                             id: true,
                             nome: true,
-                            foto: true
-                        }
-                    }
-                }
+                            username: true,
+                            foto: true,
+                        },
+                    },
+                },
             })
 
             return res.status(200).json(seguindo)
