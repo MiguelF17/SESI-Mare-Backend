@@ -221,9 +221,9 @@ router.get(
       const media =
         quantidadeAvaliacoes > 0
           ? post.musica.posts.reduce(
-              (total, avaliacao) => total + avaliacao.nota,
-              0
-            ) / quantidadeAvaliacoes
+            (total, avaliacao) => total + avaliacao.nota,
+            0
+          ) / quantidadeAvaliacoes
           : 0;
 
       let curtidoPorMim = false;
@@ -308,7 +308,28 @@ router.get(
         },
       });
 
-      return res.status(200).json(posts);
+      const curtidas = await prisma.curtida.findMany({
+        where: {
+          usuarioId,
+          postId: {
+            in: posts.map((post) => post.id),
+          },
+        },
+        select: {
+          postId: true,
+        },
+      });
+
+      const postsCurtidos = new Set(
+        curtidas.map((curtida) => curtida.postId)
+      );
+
+      const postsFormatados = posts.map((post) => ({
+        ...post,
+        curtidoPorMim: postsCurtidos.has(post.id),
+      }));
+
+      return res.status(200).json(postsFormatados);
     } catch (error) {
       console.error("Erro ao buscar minhas avaliações", error);
 
@@ -317,6 +338,138 @@ router.get(
       });
     }
   },
+);
+
+// EDITAR UM POST
+router.patch(
+  "/posts/:id",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      const usuarioId = req.usuarioId!;
+      const { texto, nota } = req.body;
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: "ID inválido" });
+      }
+
+      if (nota === undefined || nota < 1 || nota > 5 || Number(nota) % 0.5 !== 0) {
+        return res.status(400).json({
+          error: "A nota deve estar entre 1 e 5, usando intervalos de 0,5",
+        });
+      }
+
+      if (texto !== null && typeof texto !== "string") {
+        return res.status(400).json({
+          error: "O texto deve ser uma string ou null",
+        });
+      }
+
+      const post = await prisma.post.findUnique({
+        where: { id },
+      });
+
+      if (!post) {
+        return res.status(404).json({ error: "Post não encontrado" });
+      }
+
+      if (post.usuarioId !== usuarioId) {
+        return res.status(403).json({
+          error: "Você não pode editar esta avaliação",
+        });
+      }
+
+      const postAtualizado = await prisma.post.update({
+        where: { id },
+        data: {
+          texto: texto?.trim() || null,
+          nota: Number(nota),
+        },
+        include: {
+          usuario: {
+            select: {
+              id: true,
+              nome: true,
+              username: true,
+              foto: true,
+            },
+          },
+          musica: {
+            include: {
+              artista: true,
+            },
+          },
+          _count: {
+            select: {
+              curtidas: true,
+              comentarios: true,
+            },
+          },
+        },
+      });
+
+      return res.status(200).json(postAtualizado);
+    } catch (error) {
+      console.error("Erro ao editar post:", error);
+
+      return res.status(500).json({
+        error: "Erro interno ao editar avaliação",
+      });
+    }
+  }
+);
+
+// EXCLUIR UM POST
+router.delete(
+  "/posts/:id",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      const usuarioId = req.usuarioId!;
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: "ID inválido" });
+      }
+
+      const post = await prisma.post.findUnique({
+        where: { id },
+      });
+
+      if (!post) {
+        return res.status(404).json({ error: "Publicação não encontrada" });
+      }
+
+      if (post.usuarioId !== usuarioId) {
+        return res.status(403).json({
+          error: "Você não pode excluir esta publicação",
+        });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.curtida.deleteMany({
+          where: { postId: id },
+        });
+
+        await tx.comentario.deleteMany({
+          where: { postId: id },
+        });
+
+        await tx.post.delete({
+          where: { id },
+        });
+      });
+
+      return res.status(204).send();
+    } catch (error) {
+      console.error("Erro ao excluir post:", error);
+
+      return res.status(500).json({
+        error: "Erro interno ao excluir publicação",
+      });
+    }
+  }
 );
 
 export default router;
