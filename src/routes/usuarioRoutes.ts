@@ -94,18 +94,27 @@ router.post("/usuarios", async (req: Request, res: Response) => {
       });
     }
 
+    const usernameNormalizado = username.trim();
     const emailNormalizado = email.trim().toLowerCase();
 
-    // Verifica se já existe um usuário com esse email
-    const usuarioExistente = await prisma.usuario.findUnique({
+    const usuarioExistente = await prisma.usuario.findFirst({
       where: {
-        email: emailNormalizado,
+        OR: [
+          { username: usernameNormalizado },
+          { email: emailNormalizado },
+        ],
       },
     });
 
     if (usuarioExistente) {
+      if (usuarioExistente.email === emailNormalizado) {
+        return res.status(409).json({
+          error: "Este email já está cadastrado",
+        });
+      }
+
       return res.status(409).json({
-        error: "Este email já está cadastrado",
+        error: "Este nome de usuário já está em uso",
       });
     }
 
