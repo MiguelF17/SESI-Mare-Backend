@@ -124,7 +124,7 @@ router.post("/usuarios", async (req: Request, res: Response) => {
     // Cria o usuário no banco
     const usuario = await prisma.usuario.create({
       data: {
-        username,
+        username: usernameNormalizado,
         email: emailNormalizado,
         senhaHash,
       },
