@@ -448,4 +448,67 @@ router.put(
   },
 );
 
+// BUSCAR POSTS CURTIDOS PELO USUÁRIO LOGADO
+router.get(
+  "/usuarios/me/curtidas",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const usuarioId = req.usuarioId!;
+
+      const posts = await prisma.post.findMany({
+        where: {
+          curtidas: {
+            some: {
+              usuarioId,
+            },
+          },
+        },
+        orderBy: {
+          dataCriacao: "desc",
+        },
+        include: {
+          usuario: {
+            select: {
+              id: true,
+              nome: true,
+              username: true,
+              foto: true,
+            },
+          },
+          musica: {
+            include: {
+              artista: true,
+              _count: {
+                select: {
+                  posts: true,
+                },
+              },
+            },
+          },
+          _count: {
+            select: {
+              curtidas: true,
+              comentarios: true,
+            },
+          },
+        },
+      });
+
+      return res.status(200).json(
+        posts.map((post) => ({
+          ...post,
+          curtidoPorMim: true,
+        })),
+      );
+    } catch (error) {
+      console.error("Erro ao buscar posts curtidos:", error);
+
+      return res.status(500).json({
+        error: "Não foi possível buscar os posts curtidos.",
+      });
+    }
+  },
+);
+
 export default router;

@@ -53,6 +53,16 @@ router.post(
                 }
             })
 
+            // Notifica o usuário que recebeu um novo seguidor
+            await prisma.notificacao.create({
+                data: {
+                    tipo: "seguir",
+                    mensagem: "começou a seguir você",
+                    usuarioId: seguidoId,
+                    atorId: seguidorId
+                }
+            })
+
             return res.status(201).json({
                 message: "Usuário seguido com sucesso",
                 seguidor

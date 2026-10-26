@@ -67,16 +67,45 @@ router.get(
   optionalAuthMiddleware,
   async (req: AuthRequest, res: Response) => {
     try {
-      const musicaId = req.query.musicaId
+            const musicaId = req.query.musicaId
         ? Number(req.query.musicaId)
         : undefined;
 
+      const somenteSeguindo = req.query.seguindo === "true";
+
+      let usuariosSeguidos: number[] = [];
+
+      if (somenteSeguindo) {
+        if (!req.usuarioId) {
+          return res.status(401).json({
+            error: "Faça login para ver as publicações de quem você segue.",
+          });
+        }
+
+        const seguindo = await prisma.seguidor.findMany({
+          where: {
+            seguidorId: req.usuarioId,
+          },
+          select: {
+            seguidoId: true,
+          },
+        });
+
+        usuariosSeguidos = seguindo.map(
+          (relacao) => relacao.seguidoId
+        );
+      }
+
       const posts = await prisma.post.findMany({
-        where: musicaId
-          ? {
-            musicaId,
-          }
-          : undefined,
+        where: {
+          ...(musicaId !== undefined && { musicaId }),
+
+          ...(somenteSeguindo && {
+            usuarioId: {
+              in: usuariosSeguidos,
+            },
+          }),
+        },
 
         orderBy: {
           dataCriacao: "desc",

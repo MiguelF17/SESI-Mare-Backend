@@ -47,6 +47,19 @@ router.post(
                 }
             })
 
+            // Criar notificação para o autor do post
+            if (post.usuarioId !== usuarioId) {
+                await prisma.notificacao.create({
+                    data: {
+                        tipo: "curtida",
+                        mensagem: "curtiu sua publicação",
+                        usuarioId: post.usuarioId,
+                        atorId: usuarioId,
+                        postId: post.id
+                    }
+                })
+            }
+
             return res.status(201).json({
                 message: "Post curtido com sucesso",
                 curtida
@@ -79,6 +92,9 @@ router.delete(
                     }
                 }
             })
+
+
+
 
             if (!curtida) {
                 return res.status(404).json({

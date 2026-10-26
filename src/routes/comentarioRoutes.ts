@@ -49,6 +49,23 @@ router.post(
         },
       });
 
+      // Notifica o autor do post, exceto quando comenta na própria publicação
+      if (post.usuarioId !== usuarioId) {
+        await prisma.notificacao.create({
+          data: {
+            tipo: "comentario",
+            mensagem: "comentou na sua publicação",
+            usuarioId: post.usuarioId,
+            atorId: usuarioId,
+            postId: post.id,
+          },
+        });
+      }
+
+      return res.status(201).json(comentario);
+
+
+
       return res.status(201).json(comentario);
     } catch (error) {
       console.error("Erro ao criar comentário", error);
@@ -139,6 +156,7 @@ router.delete(
   },
 );
 
+
 // BUSCAR MEUS COMENTÁRIOS
 router.get(
   "/usuarios/me/comentarios",
@@ -157,6 +175,7 @@ router.get(
         },
 
         include: {
+          // Autor do comentário
           usuario: {
             select: {
               id: true,
@@ -166,19 +185,41 @@ router.get(
             },
           },
 
+          // Publicação original que recebeu o comentário
           post: {
             include: {
+              // Autor da publicação
+              usuario: {
+                select: {
+                  id: true,
+                  nome: true,
+                  username: true,
+                  foto: true,
+                },
+              },
+
+              // Música e artista avaliados
               musica: {
                 include: {
                   artista: true,
                 },
               },
 
-              usuario: {
+              // Quantidade de curtidas e comentários
+              _count: {
                 select: {
-                  id: true,
-                  nome: true,
-                  username: true,
+                  curtidas: true,
+                  comentarios: true,
+                },
+              },
+
+              // Verifica se o usuário logado curtiu a publicação
+              curtidas: {
+                where: {
+                  usuarioId,
+                },
+                select: {
+                  usuarioId: true,
                 },
               },
             },
@@ -186,15 +227,118 @@ router.get(
         },
       });
 
-      return res.status(200).json(comentarios);
+      // Formata a resposta para o frontend
+      const comentariosFormatados = comentarios.map((comentario) => {
+        const { curtidas, ...post } = comentario.post;
+
+        return {
+          ...comentario,
+
+          post: {
+            ...post,
+
+            // O PostCard espera um booleano
+            curtidoPorMim: curtidas.length > 0,
+          },
+        };
+      });
+
+      return res.status(200).json(comentariosFormatados);
     } catch (error) {
       console.error("Erro ao buscar meus comentários", error);
 
       return res.status(500).json({
-        error: "Erro interno",
+        error: "Erro interno ao buscar comentários",
       });
     }
   },
 );
+
+// BUSCAR COMENTÁRIOS DE UM USUÁRIO PELO ID
+router.get(
+  "/usuarios/:id/comentarios",
+  async (req, res: Response) => {
+    try {
+      const usuarioId = Number(req.params.id);
+
+      if (!Number.isInteger(usuarioId) || usuarioId <= 0) {
+        return res.status(400).json({
+          error: "ID de usuário inválido",
+        });
+      }
+
+      const comentarios = await prisma.comentario.findMany({
+        where: {
+          usuarioId,
+        },
+        orderBy: {
+          dataCriacao: "desc",
+        },
+        include: {
+          usuario: {
+            select: {
+              id: true,
+              nome: true,
+              username: true,
+              foto: true,
+            },
+          },
+          post: {
+            include: {
+              usuario: {
+                select: {
+                  id: true,
+                  nome: true,
+                  username: true,
+                  foto: true,
+                },
+              },
+              musica: {
+                include: {
+                  artista: true,
+                },
+              },
+              _count: {
+                select: {
+                  curtidas: true,
+                  comentarios: true,
+                },
+              },
+              curtidas: {
+                select: {
+                  usuarioId: true,
+                },
+                where: {
+                  usuarioId: -1,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const comentariosFormatados = comentarios.map((comentario) => {
+        const { curtidas, ...post } = comentario.post;
+
+        return {
+          ...comentario,
+          post: {
+            ...post,
+            curtidoPorMim: curtidas.length > 0,
+          },
+        };
+      });
+
+      return res.status(200).json(comentariosFormatados);
+    } catch (error) {
+      console.error("Erro ao buscar comentários do usuário:", error);
+
+      return res.status(500).json({
+        error: "Erro interno ao buscar comentários",
+      });
+    }
+  },
+);
+
 
 export default router;

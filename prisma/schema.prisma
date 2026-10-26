@@ -27,6 +27,8 @@ model Usuario {
   artistasFavoritos UsuarioArtista[]
   generosFavoritos  UsuarioGenero[]
   preferenciasConcluidas Boolean @default(false)
+    notificacoesRecebidas Notificacao[] @relation("NotificacoesRecebidas")
+  notificacoesEnviadas  Notificacao[] @relation("NotificacoesEnviadas")
 }
 
 model Musica {
@@ -135,4 +137,23 @@ model UsuarioGenero {
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@id([usuarioId, genero])
+}
+
+model Notificacao {
+  id        Int      @id @default(autoincrement())
+  tipo      String
+  mensagem  String
+  lida      Boolean  @default(false)
+  criadaEm  DateTime @default(now())
+
+  usuarioId Int
+  atorId    Int?
+  postId    Int?
+  musicaId  Int?
+
+  usuario Usuario @relation("NotificacoesRecebidas", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  ator Usuario? @relation("NotificacoesEnviadas", fields: [atorId], references: [id])
+
+  @@index([usuarioId, lida, criadaEm])
 }
