@@ -340,5 +340,77 @@ router.get(
   },
 );
 
+// Editar comentário
+router.patch(
+  "/comentarios/:id",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const comentarioId = Number(req.params.id);
+      const usuarioId = req.usuarioId!;
+      const { texto } = req.body;
+
+      if (!Number.isInteger(comentarioId) || comentarioId <= 0) {
+        return res.status(400).json({
+          error: "ID de comentário inválido",
+        });
+      }
+
+      if (typeof texto !== "string" || !texto.trim()) {
+        return res.status(400).json({
+          error: "O comentário não pode ficar vazio",
+        });
+      }
+
+      if (texto.trim().length > 500) {
+        return res.status(400).json({
+          error: "O comentário pode ter no máximo 500 caracteres",
+        });
+      }
+
+      const comentario = await prisma.comentario.findUnique({
+        where: { id: comentarioId },
+      });
+
+      if (!comentario) {
+        return res.status(404).json({
+          error: "Comentário não encontrado",
+        });
+      }
+
+      if (comentario.usuarioId !== usuarioId) {
+        return res.status(403).json({
+          error: "Você não pode editar este comentário",
+        });
+      }
+
+      const comentarioAtualizado = await prisma.comentario.update({
+        where: { id: comentarioId },
+        data: {
+          texto: texto.trim(),
+          editado: true,
+        },
+        include: {
+          usuario: {
+            select: {
+              id: true,
+              nome: true,
+              foto: true,
+            },
+          },
+        },
+      });
+
+      return res.status(200).json(comentarioAtualizado);
+    } catch (error) {
+      console.error("Erro ao editar comentário", error);
+
+      return res.status(500).json({
+        error: "Erro interno ao editar comentário",
+      });
+    }
+  },
+);
+
 
 export default router;

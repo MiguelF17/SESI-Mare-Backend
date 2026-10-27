@@ -8,6 +8,25 @@ import cloudinary from "../cloudinary";
 
 const router = Router();
 
+async function gerarNomeUsuario() {
+  let nome = "";
+  let existe = true;
+
+  while (existe) {
+    const numero = Math.floor(1000 + Math.random() * 9000);
+
+    nome = `Usuário${numero}`;
+
+    const usuario = await prisma.usuario.findFirst({
+      where: { nome },
+    });
+
+    existe = usuario !== null;
+  }
+
+  return nome;
+}
+
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -56,7 +75,7 @@ router.patch(
         {
           folder: "mare/perfis",
         }
-      );
+      )
 
       const usuario = await prisma.usuario.update({
         where: { id: usuarioId },
@@ -120,10 +139,12 @@ router.post("/usuarios", async (req: Request, res: Response) => {
 
     // Transforma a senha em um hash
     const senhaHash = await bcrypt.hash(senha, 10);
+    const nome = await gerarNomeUsuario();
 
     // Cria o usuário no banco
     const usuario = await prisma.usuario.create({
       data: {
+        nome,
         username: usernameNormalizado,
         email: emailNormalizado,
         senhaHash,
@@ -132,6 +153,7 @@ router.post("/usuarios", async (req: Request, res: Response) => {
 
     // Não devolvemos a senha/hash para o frontend
     return res.status(201).json({
+      nome: usuario.nome,
       id: usuario.id,
       username: usuario.username,
       email: usuario.email,

@@ -93,6 +93,7 @@ model Comentario {
   postId      Int
   texto       String
   dataCriacao DateTime @default(now())
+  editado Boolean @default(false)
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
   post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
