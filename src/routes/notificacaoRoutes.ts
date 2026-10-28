@@ -9,14 +9,12 @@ import {
 const router = Router();
 
 // Lista as notificações do usuário logado.
-
 router.get(
     "/notificacoes",
     authMiddleware,
     async (req: AuthRequest, res: Response) => {
         try {
             const usuarioId = req.usuarioId!;
-
 
             const notificacoes = await prisma.notificacao.findMany({
                 where: { usuarioId },
@@ -38,11 +36,13 @@ router.get(
             const resultado = await Promise.all(
                 notificacoes.map(async (notificacao) => {
                     let postDetalhes = null;
-                    let textoComentario = null;
+                    let textoComentario: string | null = null;
 
                     if (notificacao.postId) {
                         postDetalhes = await prisma.post.findUnique({
-                            where: { id: notificacao.postId },
+                            where: {
+                                id: notificacao.postId,
+                            },
                             select: {
                                 id: true,
                                 texto: true,
@@ -62,7 +62,10 @@ router.get(
                             },
                         });
 
-                        if (notificacao.tipo === "comentario" && notificacao.atorId) {
+                        if (
+                            notificacao.tipo === "comentario" &&
+                            notificacao.atorId
+                        ) {
                             const inicio = new Date(
                                 notificacao.criadaEm.getTime() - 5000
                             );
@@ -71,22 +74,23 @@ router.get(
                                 notificacao.criadaEm.getTime() + 5000
                             );
 
-                            const comentario = await prisma.comentario.findFirst({
-                                where: {
-                                    postId: notificacao.postId,
-                                    usuarioId: notificacao.atorId,
-                                    dataCriacao: {
-                                        gte: inicio,
-                                        lte: fim,
+                            const comentario =
+                                await prisma.comentario.findFirst({
+                                    where: {
+                                        postId: notificacao.postId,
+                                        usuarioId: notificacao.atorId,
+                                        dataCriacao: {
+                                            gte: inicio,
+                                            lte: fim,
+                                        },
                                     },
-                                },
-                                orderBy: {
-                                    dataCriacao: "desc",
-                                },
-                                select: {
-                                    texto: true,
-                                },
-                            });
+                                    orderBy: {
+                                        dataCriacao: "desc",
+                                    },
+                                    select: {
+                                        texto: true,
+                                    },
+                                });
 
                             textoComentario = comentario?.texto ?? null;
                         }
@@ -109,80 +113,7 @@ router.get(
                 })
             );
 
-            res.json(resultado);
-
-
-            const dados = await Promise.all(
-                notificacoes.map(async (notificacao) => {
-                    let textoComentario: string | null = null;
-
-                    if (
-                        notificacao.tipo === "comentario" &&
-                        notificacao.postId &&
-                        notificacao.atorId
-                    ) {
-                        const comentario = await prisma.comentario.findFirst({
-                            where: {
-                                postId: notificacao.postId,
-                                usuarioId: notificacao.atorId,
-                                dataCriacao: {
-                                    gte: new Date(
-                                        notificacao.criadaEm.getTime() - 5000
-                                    ),
-                                    lte: new Date(
-                                        notificacao.criadaEm.getTime() + 5000
-                                    ),
-                                },
-                            },
-                            orderBy: {
-                                dataCriacao: "desc",
-                            },
-                            select: {
-                                texto: true,
-                            },
-                        });
-
-                        textoComentario = comentario?.texto ?? null;
-                    }
-
-                    let musica = null;
-
-                    if (notificacao.postId) {
-                        const post = await prisma.post.findUnique({
-                            where: {
-                                id: notificacao.postId,
-                            },
-                            select: {
-                                musica: {
-                                    select: {
-                                        id: true,
-                                        titulo: true,
-                                        capa: true,
-                                    },
-                                },
-                            },
-                        });
-
-                        musica = post?.musica ?? null;
-                    }
-
-                    return {
-                        id: notificacao.id,
-                        tipo: notificacao.tipo,
-                        mensagem: notificacao.mensagem,
-                        lida: notificacao.lida,
-                        criadaEm: notificacao.criadaEm,
-                        usuario: notificacao.ator,
-                        usuarioId: notificacao.atorId,
-                        postId: notificacao.postId,
-                        musicaId: notificacao.musicaId,
-                        textoComentario,
-                        musica
-                    };
-                })
-            );
-
-            return res.json(dados);
+            return res.json(resultado);
         } catch (error) {
             console.error("Erro ao buscar notificações:", error);
 
@@ -192,7 +123,6 @@ router.get(
         }
     }
 );
-
 
 // Marca uma notificação específica como lida.
 router.patch(
