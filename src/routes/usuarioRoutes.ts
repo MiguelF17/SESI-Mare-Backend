@@ -5,6 +5,8 @@ import jwt from "jsonwebtoken";
 import { authMiddleware, optionalAuthMiddleware, AuthRequest } from "../middleware/authMiddleware";
 import multer from "multer";
 import cloudinary from "../cloudinary";
+import { randomBytes, createHash } from "crypto";
+import { enviarEmailVerificacao } from "../services/emailService";
 
 const router = Router();
 
@@ -103,17 +105,22 @@ router.patch(
 // CADASTRAR USUÁRIO
 router.post("/usuarios", async (req: Request, res: Response) => {
   try {
-    // Pega os dados enviados pelo frontend
     const { username, email, senha } = req.body;
 
-    // Verifica se os campos obrigatórios foram preenchidos
-    if (!username || !email || !senha) {
+    if (
+      typeof username !== "string" ||
+      typeof email !== "string" ||
+      typeof senha !== "string" ||
+      !username.trim() ||
+      !email.trim() ||
+      !senha
+    ) {
       return res.status(400).json({
-        error: "Informe username, email e senha",
+        error: "Informe username, email e senha.",
       });
     }
 
-    const usernameNormalizado = username.trim();
+    const usernameNormalizado = username.trim().toLowerCase();
     const emailNormalizado = email.trim().toLowerCase();
 
     const usuarioExistente = await prisma.usuario.findFirst({
@@ -128,73 +135,289 @@ router.post("/usuarios", async (req: Request, res: Response) => {
     if (usuarioExistente) {
       if (usuarioExistente.email === emailNormalizado) {
         return res.status(409).json({
-          error: "Este email já está cadastrado",
+          error: "Este email já está cadastrado.",
         });
       }
 
       return res.status(409).json({
-        error: "Este nome de usuário já está em uso",
+        error: "Este nome de usuário já está em uso.",
       });
     }
 
-    // Transforma a senha em um hash
     const senhaHash = await bcrypt.hash(senha, 10);
     const nome = await gerarNomeUsuario();
 
-    // Cria o usuário no banco
+    // Gera um token aleatório para o link de confirmação
+    const token = randomBytes(32).toString("hex");
+
+    // Salva somente o hash do token no banco
+    const tokenHash = createHash("sha256")
+      .update(token)
+      .digest("hex");
+
+    // O link será válido por 1 hora
+    const expiracao = new Date(Date.now() + 60 * 60 * 1000);
+
     const usuario = await prisma.usuario.create({
       data: {
         nome,
         username: usernameNormalizado,
         email: emailNormalizado,
         senhaHash,
+        emailVerificado: false,
+        tokenVerificacaoHash: tokenHash,
+        tokenVerificacaoExpiraEm: expiracao,
+        ultimoEmailVerificacaoEnviadoEm: new Date(),
       },
     });
 
-    // Não devolvemos a senha/hash para o frontend
+    try {
+      await enviarEmailVerificacao({
+        email: emailNormalizado,
+        token,
+      });
+    } catch (erroEmail) {
+      console.error("Erro ao enviar e-mail de verificação:", erroEmail);
+
+      // Se o e-mail não for enviado, remove a conta criada
+      await prisma.usuario.delete({
+        where: { id: usuario.id },
+      });
+
+      return res.status(500).json({
+        error: "Não foi possível enviar o e-mail de verificação. Tente novamente.",
+      });
+    }
+
     return res.status(201).json({
-      nome: usuario.nome,
-      id: usuario.id,
-      username: usuario.username,
-      email: usuario.email,
+      message: "Conta criada! Verifique seu e-mail para ativá-la.",
+      usuario: {
+        id: usuario.id,
+        nome: usuario.nome,
+        username: usuario.username,
+        email: usuario.email,
+      },
     });
   } catch (error) {
-    console.error("Erro ao cadastrar usuário", error);
+    console.error("Erro ao cadastrar usuário:", error);
 
     return res.status(500).json({
-      error: "Erro interno",
+      error: "Erro interno ao cadastrar usuário.",
     });
   }
 });
+
+// VERIFICAR E-MAIL
+router.post("/usuarios/verificar-email", async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+
+    if (typeof token !== "string" || !token) {
+      return res.status(400).json({
+        error: "Token de verificação não informado.",
+      });
+    }
+
+    const tokenHash = createHash("sha256")
+      .update(token)
+      .digest("hex");
+
+    const usuario = await prisma.usuario.findUnique({
+      where: {
+        tokenVerificacaoHash: tokenHash,
+      },
+    });
+
+    if (!usuario) {
+      return res.status(400).json({
+        error: "Link de verificação inválido ou já utilizado.",
+      });
+    }
+
+    if (
+      !usuario.tokenVerificacaoExpiraEm ||
+      usuario.tokenVerificacaoExpiraEm < new Date()
+    ) {
+      await prisma.usuario.update({
+        where: { id: usuario.id },
+        data: {
+          tokenVerificacaoHash: null,
+          tokenVerificacaoExpiraEm: null,
+        },
+      });
+
+      return res.status(400).json({
+        error: "O link de verificação expirou. Solicite um novo e-mail.",
+      });
+    }
+
+    await prisma.usuario.update({
+      where: { id: usuario.id },
+      data: {
+        emailVerificado: true,
+        tokenVerificacaoHash: null,
+        tokenVerificacaoExpiraEm: null,
+      },
+    });
+
+    return res.status(200).json({
+      message: "E-mail verificado com sucesso!",
+    });
+  } catch (error) {
+    console.error("Erro ao verificar e-mail:", error);
+
+    return res.status(500).json({
+      error: "Não foi possível verificar o e-mail.",
+    });
+  }
+});
+
+// REENVIAR E-MAIL DE VERIFICAÇÃO
+router.post(
+  "/usuarios/reenviar-verificacao",
+  async (req: Request, res: Response) => {
+    try {
+      const { login } = req.body;
+
+      if (typeof login !== "string" || !login.trim()) {
+        return res.status(400).json({
+          error: "Informe seu e-mail ou username.",
+        });
+      }
+
+      const loginNormalizado = login.trim().toLowerCase();
+
+      const usuario = await prisma.usuario.findFirst({
+        where: {
+          OR: [
+            { email: loginNormalizado },
+            { username: loginNormalizado },
+          ],
+        },
+      });
+
+      // Resposta genérica para não revelar quais contas existem.
+      if (!usuario || usuario.emailVerificado) {
+        return res.status(200).json({
+          message:
+            "Se existir uma conta não verificada com esses dados, enviaremos um novo e-mail.",
+        });
+      }
+
+      // Impede solicitações repetidas em menos de 1 minuto.
+      if (usuario.ultimoEmailVerificacaoEnviadoEm) {
+        const tempoDesdeUltimoEnvio =
+          Date.now() -
+          usuario.ultimoEmailVerificacaoEnviadoEm.getTime();
+
+        if (tempoDesdeUltimoEnvio < 60 * 1000) {
+          return res.status(429).json({
+            error: "Aguarde 1 minuto antes de solicitar outro e-mail.",
+          });
+        }
+      }
+
+      const token = randomBytes(32).toString("hex");
+
+      const tokenHash = createHash("sha256")
+        .update(token)
+        .digest("hex");
+
+      const expiracao = new Date(Date.now() + 60 * 60 * 1000);
+
+      await prisma.usuario.update({
+        where: { id: usuario.id },
+        data: {
+          tokenVerificacaoHash: tokenHash,
+          tokenVerificacaoExpiraEm: expiracao,
+          ultimoEmailVerificacaoEnviadoEm: new Date(),
+        },
+      });
+
+      try {
+        await enviarEmailVerificacao({
+          email: usuario.email,
+          token,
+        });
+      } catch (erroEmail) {
+        console.error("Erro ao reenviar e-mail:", erroEmail);
+
+        // Invalida o token caso o envio falhe.
+        await prisma.usuario.update({
+          where: { id: usuario.id },
+          data: {
+            tokenVerificacaoHash: null,
+            tokenVerificacaoExpiraEm: null,
+          },
+        });
+
+        return res.status(500).json({
+          error: "Não foi possível enviar o e-mail. Tente novamente mais tarde.",
+        });
+      }
+
+      return res.status(200).json({
+        message: "Um novo e-mail de verificação foi enviado.",
+      });
+    } catch (error) {
+      console.error("Erro ao reenviar verificação:", error);
+
+      return res.status(500).json({
+        error: "Não foi possível reenviar o e-mail de verificação.",
+      });
+    }
+  }
+);
+
 
 // LOGAR USUÁRIO
 router.post("/login", async (req: Request, res: Response) => {
   try {
     const { login, senha } = req.body;
 
-    if (!login || !senha) {
+    if (
+      typeof login !== "string" ||
+      typeof senha !== "string" ||
+      !login.trim() ||
+      !senha
+    ) {
       return res.status(400).json({
-        error: "Informe email ou usuário, e senha",
+        error: "Informe seu e-mail ou usuário, e senha.",
       });
     }
 
+    const loginNormalizado = login.trim().toLowerCase();
+
     const usuario = await prisma.usuario.findFirst({
       where: {
-        OR: [{ email: login }, { username: login }],
+        OR: [
+          { email: loginNormalizado },
+          { username: loginNormalizado },
+        ],
       },
     });
 
     if (!usuario) {
       return res.status(401).json({
-        error: "Username, email ou senha incorretos",
+        error: "Username, email ou senha incorretos.",
       });
     }
 
-    const senhaValida = await bcrypt.compare(senha, usuario.senhaHash);
+    const senhaValida = await bcrypt.compare(
+      senha,
+      usuario.senhaHash
+    );
 
     if (!senhaValida) {
       return res.status(401).json({
-        error: "Username, email ou senha incorretos",
+        error: "Username, email ou senha incorretos.",
+      });
+    }
+
+    if (!usuario.emailVerificado) {
+      return res.status(403).json({
+        code: "EMAIL_NAO_VERIFICADO",
+        error: "Confirme seu e-mail antes de entrar.",
       });
     }
 
@@ -416,7 +639,7 @@ router.put(
       if (username !== undefined) {
         const usernameExistente = await prisma.usuario.findFirst({
           where: {
-            username: username.trim(),
+            username: username.trim().toLowerCase(),
             NOT: {
               id: usuarioId,
             },
@@ -441,7 +664,7 @@ router.put(
           }),
 
           ...(username !== undefined && {
-            username: username.trim(),
+            username: username.trim().toLowerCase(),
           }),
 
           ...(bio !== undefined && {

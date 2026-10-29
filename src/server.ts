@@ -14,6 +14,7 @@ import notificacaoRoutes from "./routes/notificacaoRoutes";
 import "dotenv/config";
 import cors from "cors";
 
+
 const app = express();
 
 app.use(

@@ -13,6 +13,10 @@ model Usuario {
   username     String @unique
   email        String   @unique
   senhaHash    String
+  emailVerificado          Boolean   @default(false)
+tokenVerificacaoHash     String?   @unique
+tokenVerificacaoExpiraEm DateTime?
+ultimoEmailVerificacaoEnviadoEm DateTime?
   foto         String?
   capa        String?
   bio          String?
