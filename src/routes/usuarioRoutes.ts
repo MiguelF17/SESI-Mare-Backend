@@ -5,8 +5,7 @@ import jwt from "jsonwebtoken";
 import { authMiddleware, optionalAuthMiddleware, AuthRequest } from "../middleware/authMiddleware";
 import multer from "multer";
 import cloudinary from "../cloudinary";
-import { randomBytes, createHash } from "crypto";
-import { enviarEmailVerificacao } from "../services/emailService";
+import { createHash } from "crypto";
 
 const router = Router();
 
@@ -147,50 +146,19 @@ router.post("/usuarios", async (req: Request, res: Response) => {
     const senhaHash = await bcrypt.hash(senha, 10);
     const nome = await gerarNomeUsuario();
 
-    // Gera um token aleatório para o link de confirmação
-    const token = randomBytes(32).toString("hex");
-
-    // Salva somente o hash do token no banco
-    const tokenHash = createHash("sha256")
-      .update(token)
-      .digest("hex");
-
-    // O link será válido por 1 hora
-    const expiracao = new Date(Date.now() + 60 * 60 * 1000);
-
     const usuario = await prisma.usuario.create({
       data: {
         nome,
         username: usernameNormalizado,
         email: emailNormalizado,
         senhaHash,
-        emailVerificado: false,
-        tokenVerificacaoHash: tokenHash,
-        tokenVerificacaoExpiraEm: expiracao,
-        ultimoEmailVerificacaoEnviadoEm: new Date(),
+        // A verificação por e-mail está temporariamente desativada.
+        emailVerificado: true,
       },
     });
 
-    try {
-      await enviarEmailVerificacao({
-        email: emailNormalizado,
-        token,
-      });
-    } catch (erroEmail) {
-      console.error("Erro ao enviar e-mail de verificação:", erroEmail);
-
-      // Se o e-mail não for enviado, remove a conta criada
-      await prisma.usuario.delete({
-        where: { id: usuario.id },
-      });
-
-      return res.status(500).json({
-        error: "Não foi possível enviar o e-mail de verificação. Tente novamente.",
-      });
-    }
-
     return res.status(201).json({
-      message: "Conta criada! Verifique seu e-mail para ativá-la.",
+      message: "Conta criada com sucesso!",
       usuario: {
         id: usuario.id,
         nome: usuario.nome,
@@ -277,87 +245,8 @@ router.post(
   "/usuarios/reenviar-verificacao",
   async (req: Request, res: Response) => {
     try {
-      const { login } = req.body;
-
-      if (typeof login !== "string" || !login.trim()) {
-        return res.status(400).json({
-          error: "Informe seu e-mail ou username.",
-        });
-      }
-
-      const loginNormalizado = login.trim().toLowerCase();
-
-      const usuario = await prisma.usuario.findFirst({
-        where: {
-          OR: [
-            { email: loginNormalizado },
-            { username: loginNormalizado },
-          ],
-        },
-      });
-
-      // Resposta genérica para não revelar quais contas existem.
-      if (!usuario || usuario.emailVerificado) {
-        return res.status(200).json({
-          message:
-            "Se existir uma conta não verificada com esses dados, enviaremos um novo e-mail.",
-        });
-      }
-
-      // Impede solicitações repetidas em menos de 1 minuto.
-      if (usuario.ultimoEmailVerificacaoEnviadoEm) {
-        const tempoDesdeUltimoEnvio =
-          Date.now() -
-          usuario.ultimoEmailVerificacaoEnviadoEm.getTime();
-
-        if (tempoDesdeUltimoEnvio < 60 * 1000) {
-          return res.status(429).json({
-            error: "Aguarde 1 minuto antes de solicitar outro e-mail.",
-          });
-        }
-      }
-
-      const token = randomBytes(32).toString("hex");
-
-      const tokenHash = createHash("sha256")
-        .update(token)
-        .digest("hex");
-
-      const expiracao = new Date(Date.now() + 60 * 60 * 1000);
-
-      await prisma.usuario.update({
-        where: { id: usuario.id },
-        data: {
-          tokenVerificacaoHash: tokenHash,
-          tokenVerificacaoExpiraEm: expiracao,
-          ultimoEmailVerificacaoEnviadoEm: new Date(),
-        },
-      });
-
-      try {
-        await enviarEmailVerificacao({
-          email: usuario.email,
-          token,
-        });
-      } catch (erroEmail) {
-        console.error("Erro ao reenviar e-mail:", erroEmail);
-
-        // Invalida o token caso o envio falhe.
-        await prisma.usuario.update({
-          where: { id: usuario.id },
-          data: {
-            tokenVerificacaoHash: null,
-            tokenVerificacaoExpiraEm: null,
-          },
-        });
-
-        return res.status(500).json({
-          error: "Não foi possível enviar o e-mail. Tente novamente mais tarde.",
-        });
-      }
-
       return res.status(200).json({
-        message: "Um novo e-mail de verificação foi enviado.",
+        message: "A verificação por e-mail está temporariamente desativada.",
       });
     } catch (error) {
       console.error("Erro ao reenviar verificação:", error);
@@ -411,13 +300,6 @@ router.post("/login", async (req: Request, res: Response) => {
     if (!senhaValida) {
       return res.status(401).json({
         error: "Username, email ou senha incorretos.",
-      });
-    }
-
-    if (!usuario.emailVerificado) {
-      return res.status(403).json({
-        code: "EMAIL_NAO_VERIFICADO",
-        error: "Confirme seu e-mail antes de entrar.",
       });
     }
 
