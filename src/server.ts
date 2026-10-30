@@ -19,8 +19,8 @@ import notificacaoRoutes from "./routes/notificacaoRoutes";
 const app = express();
 
 const origensPermitidas = [
-  "https://mare.vercel.app",
-  "https://mare-git-miguel-miguelfrancellino1705-3124.vercel.app/",
+  "https://mare-amber.vercel.app",
+  "https://mare-git-miguel-miguelfrancellino1705-3124.vercel.app",
 ];
 
 app.use(
