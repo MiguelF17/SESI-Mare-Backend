@@ -18,12 +18,22 @@ import notificacaoRoutes from "./routes/notificacaoRoutes";
 
 const app = express();
 
+const origensPermitidas = [
+  "https://mare.vercel.app",
+  "https://mare-git-miguel-miguelfrancellino1705-3124.vercel.app/",
+];
+
 app.use(
-    cors({
-        origin: process.env.FRONTEND_URL,
-        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-        allowedHeaders: ["Content-Type", "Authorization"],
-    })
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || origensPermitidas.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Origem não permitida pelo CORS"));
+      }
+    },
+    credentials: true,
+  })
 );
 
 app.use(express.json());
