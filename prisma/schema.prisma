@@ -74,7 +74,7 @@ model Post {
   curtidas    Curtida[]
   comentarios Comentario[]
 
-  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   musica  Musica  @relation(fields: [musicaId], references: [id])
 
   @@unique([usuarioId, musicaId])
@@ -85,7 +85,7 @@ model Curtida {
   postId      Int
   dataCriacao DateTime @default(now())
 
-  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@id([usuarioId, postId])
@@ -99,7 +99,7 @@ model Comentario {
   dataCriacao DateTime @default(now())
   editado Boolean @default(false)
 
-  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
@@ -108,8 +108,8 @@ model Seguidor {
   seguidoId   Int
   dataCriacao DateTime @default(now())
 
-  seguidor Usuario @relation("seguindo", fields: [seguidorId], references: [id])
-  seguido  Usuario @relation("seguidores", fields: [seguidoId], references: [id])
+  seguidor Usuario @relation("seguindo", fields: [seguidorId], references: [id], onDelete: Cascade)
+  seguido  Usuario @relation("seguidores", fields: [seguidoId], references: [id], onDelete: Cascade)
 
   @@id([seguidorId, seguidoId])
 }
@@ -119,7 +119,7 @@ model Salvamento {
   musicaId    Int
   dataCriacao DateTime @default(now())
 
-  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   musica  Musica  @relation(fields: [musicaId], references: [id])
 
   @@id([usuarioId, musicaId])
