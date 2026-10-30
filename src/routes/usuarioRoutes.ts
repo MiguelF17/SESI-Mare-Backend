@@ -6,6 +6,7 @@ import { authMiddleware, optionalAuthMiddleware, AuthRequest } from "../middlewa
 import multer from "multer";
 import cloudinary from "../cloudinary";
 import { createHash } from "crypto";
+// import { randomBytes } from "crypto"; // usado pelo envio de verificação desativado
 
 const router = Router();
 
@@ -146,6 +147,12 @@ router.post("/usuarios", async (req: Request, res: Response) => {
     const senhaHash = await bcrypt.hash(senha, 10);
     const nome = await gerarNomeUsuario();
 
+    /* Envio de verificação temporariamente desativado.
+    const token = randomBytes(32).toString("hex");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const expiracao = new Date(Date.now() + 60 * 60 * 1000);
+    */
+
     const usuario = await prisma.usuario.create({
       data: {
         nome,
@@ -154,8 +161,17 @@ router.post("/usuarios", async (req: Request, res: Response) => {
         senhaHash,
         // A verificação por e-mail está temporariamente desativada.
         emailVerificado: true,
+        /* Reativar junto com o envio de email:
+        tokenVerificacaoHash: tokenHash,
+        tokenVerificacaoExpiraEm: expiracao,
+        ultimoEmailVerificacaoEnviadoEm: new Date(),
+        */
       },
     });
+
+    /* Envio de verificação temporariamente desativado.
+    await enviarEmailVerificacao({ email: emailNormalizado, token });
+    */
 
     return res.status(201).json({
       message: "Conta criada com sucesso!",
@@ -240,7 +256,7 @@ router.post("/usuarios/verificar-email", async (req: Request, res: Response) => 
   }
 });
 
-// REENVIAR E-MAIL DE VERIFICAÇÃO
+/* REENVIAR E-MAIL DE VERIFICAÇÃO — temporariamente desativado.
 router.post(
   "/usuarios/reenviar-verificacao",
   async (req: Request, res: Response) => {
@@ -257,6 +273,7 @@ router.post(
     }
   }
 );
+*/
 
 
 // LOGAR USUÁRIO

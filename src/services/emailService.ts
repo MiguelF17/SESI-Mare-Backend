@@ -1,4 +1,5 @@
 
+/* Serviço de envio de email de verificação — temporariamente desativado.
 import nodemailer from "nodemailer";
 import path from "path";
 
@@ -248,3 +249,4 @@ export async function enviarEmailVerificacao({
     `,
     });
 }
+*/
