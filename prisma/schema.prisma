@@ -25,6 +25,7 @@ ultimoEmailVerificacaoEnviadoEm DateTime?
   posts             Post[]
   curtidas          Curtida[]
   comentarios       Comentario[]
+  curtidasComentarios ComentarioCurtida[]
   seguindo          Seguidor[]       @relation("seguindo")
   seguidores        Seguidor[]       @relation("seguidores")
   salvamentos       Salvamento[]
@@ -70,6 +71,7 @@ model Post {
   nota        Float
   texto       String
   dataCriacao DateTime @default(now())
+  editado     Boolean  @default(false)
 
   curtidas    Curtida[]
   comentarios Comentario[]
@@ -97,10 +99,28 @@ model Comentario {
   postId      Int
   texto       String
   dataCriacao DateTime @default(now())
-  editado Boolean @default(false)
+  editado     Boolean  @default(false)
+  respostaAId Int?
 
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  respostaA Comentario? @relation("RespostasComentario", fields: [respostaAId], references: [id], onDelete: Cascade)
+  respostas Comentario[] @relation("RespostasComentario")
+  curtidas   ComentarioCurtida[]
+
+  @@index([respostaAId])
+}
+
+model ComentarioCurtida {
+  usuarioId   Int
+  comentarioId Int
+  dataCriacao DateTime @default(now())
+
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  comentario Comentario @relation(fields: [comentarioId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, comentarioId])
+  @@index([comentarioId])
 }
 
 model Seguidor {

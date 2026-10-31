@@ -47,6 +47,7 @@ router.get(
                                 id: true,
                                 texto: true,
                                 nota: true,
+                                editado: true,
                                 musica: {
                                     select: {
                                         id: true,

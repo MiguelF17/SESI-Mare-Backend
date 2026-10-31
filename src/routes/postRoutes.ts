@@ -9,6 +9,10 @@ import {
 
 const router = Router();
 
+function notaValida(nota: unknown): nota is number {
+  return typeof nota === "number" && Number.isFinite(nota) && nota >= 1 && nota <= 5 && Number.isInteger(nota * 2);
+}
+
 // CRIAR UM POST
 router.post(
   "/posts",
@@ -17,21 +21,16 @@ router.post(
     try {
       const { musicaId, nota, texto } = req.body;
 
-      if (!musicaId || nota === undefined || !texto) {
+      const idMusica = Number(musicaId);
+      if (!Number.isInteger(idMusica) || idMusica <= 0 || !notaValida(nota) || typeof texto !== "string" || !texto.trim()) {
         return res.status(400).json({
-          error: "Informe música, nota e texto",
-        });
-      }
-
-      if (nota < 1 || nota > 5 || Number(nota) % 0.5 !== 0) {
-        return res.status(400).json({
-          error: "A nota deve estar entre 1 e 5, usando intervalos de 0,5",
+          error: "Informe uma música válida, uma nota de 1 a 5 em intervalos de 0,5 e um texto",
         });
       }
 
       const musica = await prisma.musica.findUnique({
         where: {
-          id: Number(musicaId),
+          id: idMusica,
         },
       });
 
@@ -44,15 +43,21 @@ router.post(
       const post = await prisma.post.create({
         data: {
           usuarioId: req.usuarioId!,
-          musicaId: Number(musicaId),
-          nota: Number(nota),
-          texto,
+          musicaId: idMusica,
+          nota,
+          texto: texto.trim(),
         },
       });
 
       return res.status(201).json(post);
     } catch (error) {
       console.error("Erro ao criar post", error);
+
+      if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+        return res.status(409).json({
+          error: "Você já avaliou esta música. Edite sua avaliação existente.",
+        });
+      }
 
       return res.status(500).json({
         error: "Erro interno",
@@ -67,9 +72,13 @@ router.get(
   optionalAuthMiddleware,
   async (req: AuthRequest, res: Response) => {
     try {
-            const musicaId = req.query.musicaId
+      const musicaId = req.query.musicaId
         ? Number(req.query.musicaId)
         : undefined;
+
+      if (musicaId !== undefined && (!Number.isInteger(musicaId) || musicaId <= 0)) {
+        return res.status(400).json({ error: "ID de música inválido" });
+      }
 
       const somenteSeguindo = req.query.seguindo === "true";
 
@@ -141,29 +150,20 @@ router.get(
         },
       });
 
-      const postsComCurtida = await Promise.all(
-        posts.map(async (post) => {
-          let curtidoPorMim = false;
-
-          if (req.usuarioId) {
-            const curtida = await prisma.curtida.findUnique({
-              where: {
-                usuarioId_postId: {
-                  usuarioId: req.usuarioId,
-                  postId: post.id,
-                },
-              },
-            });
-
-            curtidoPorMim = !!curtida;
-          }
-
-          return {
-            ...post,
-            curtidoPorMim,
-          };
-        }),
-      );
+      const curtidas = req.usuarioId && posts.length > 0
+        ? await prisma.curtida.findMany({
+            where: {
+              usuarioId: req.usuarioId,
+              postId: { in: posts.map((post) => post.id) },
+            },
+            select: { postId: true },
+          })
+        : [];
+      const postsCurtidos = new Set(curtidas.map((curtida) => curtida.postId));
+      const postsComCurtida = posts.map((post) => ({
+        ...post,
+        curtidoPorMim: postsCurtidos.has(post.id),
+      }));
 
       const postsFormatados = postsComCurtida.map((post) => {
         const quantidadeAvaliacoes = post.musica.posts.length;
@@ -383,7 +383,7 @@ router.patch(
         return res.status(400).json({ error: "ID inválido" });
       }
 
-      if (nota === undefined || nota < 1 || nota > 5 || Number(nota) % 0.5 !== 0) {
+      if (!notaValida(nota)) {
         return res.status(400).json({
           error: "A nota deve estar entre 1 e 5, usando intervalos de 0,5",
         });
@@ -412,8 +412,9 @@ router.patch(
       const postAtualizado = await prisma.post.update({
         where: { id },
         data: {
-          texto: texto?.trim() || null,
-          nota: Number(nota),
+          texto: typeof texto === "string" ? texto.trim() : "",
+          nota,
+          editado: true,
         },
         include: {
           usuario: {

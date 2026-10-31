@@ -1,6 +1,10 @@
 import { Router, Response } from "express";
 import prisma from "../prismaClient";
-import { authMiddleware, AuthRequest } from "../middleware/authMiddleware";
+import {
+  authMiddleware,
+  optionalAuthMiddleware,
+  AuthRequest,
+} from "../middleware/authMiddleware";
 
 const router = Router();
 
@@ -12,12 +16,30 @@ router.post(
     try {
       const postId = Number(req.params.postId);
       const usuarioId = req.usuarioId!;
-      const { texto } = req.body;
+      const { texto, respostaAId: respostaAIdInformada } = req.body;
 
-      if (!texto) {
+      if (!Number.isInteger(postId) || postId <= 0) {
+        return res.status(400).json({ error: "ID de publicação inválido" });
+      }
+
+      if (typeof texto !== "string" || !texto.trim()) {
         return res.status(400).json({
           error: "Informe o texto do comentário",
         });
+      }
+
+      if (texto.trim().length > 500) {
+        return res.status(400).json({
+          error: "O comentário pode ter no máximo 500 caracteres",
+        });
+      }
+
+      const respostaAId = respostaAIdInformada == null
+        ? null
+        : Number(respostaAIdInformada);
+
+      if (respostaAId !== null && (!Number.isInteger(respostaAId) || respostaAId <= 0)) {
+        return res.status(400).json({ error: "ID do comentário respondido inválido" });
       }
 
       const post = await prisma.post.findUnique({
@@ -32,39 +54,68 @@ router.post(
         });
       }
 
+      let comentarioRespondido: {
+        id: number;
+        postId: number;
+        respostaAId: number | null;
+        usuarioId: number;
+      } | null = null;
+      if (respostaAId !== null) {
+        comentarioRespondido = await prisma.comentario.findUnique({
+          where: { id: respostaAId },
+          select: { id: true, postId: true, respostaAId: true, usuarioId: true },
+        });
+
+        if (!comentarioRespondido) {
+          return res.status(404).json({ error: "Comentário respondido não encontrado" });
+        }
+
+        if (comentarioRespondido.postId !== postId) {
+          return res.status(400).json({
+            error: "O comentário respondido pertence a outra publicação",
+          });
+        }
+
+        if (comentarioRespondido.respostaAId !== null) {
+          return res.status(400).json({
+            error: "Respostas só podem ser feitas em comentários principais",
+          });
+        }
+      }
+
       const comentario = await prisma.comentario.create({
         data: {
           usuarioId,
           postId,
-          texto,
+          texto: texto.trim(),
+          respostaAId,
         },
         include: {
           usuario: {
             select: {
               id: true,
               nome: true,
+              username: true,
               foto: true,
             },
           },
         },
       });
 
-      // Notifica o autor do post, exceto quando comenta na própria publicação
-      if (post.usuarioId !== usuarioId) {
+      const usuarioNotificado = comentarioRespondido?.usuarioId ?? post.usuarioId;
+      if (usuarioNotificado !== usuarioId) {
         await prisma.notificacao.create({
           data: {
             tipo: "comentario",
-            mensagem: "comentou na sua publicação",
-            usuarioId: post.usuarioId,
+            mensagem: comentarioRespondido
+              ? "respondeu ao seu comentário"
+              : "comentou na sua publicação",
+            usuarioId: usuarioNotificado,
             atorId: usuarioId,
             postId: post.id,
           },
         });
       }
-
-      return res.status(201).json(comentario);
-
-
 
       return res.status(201).json(comentario);
     } catch (error) {
@@ -78,13 +129,23 @@ router.post(
 );
 
 // Listar comentários de um post
-router.get("/posts/:postId/comentarios", async (req, res: Response) => {
+router.get(
+  "/posts/:postId/comentarios",
+  optionalAuthMiddleware,
+  async (req: AuthRequest, res: Response) => {
   try {
     const postId = Number(req.params.postId);
+
+    if (!Number.isInteger(postId) || postId <= 0) {
+      return res.status(400).json({ error: "ID de publicação inválido" });
+    }
+
+    const usuarioCurtida = req.usuarioId ?? -1;
 
     const comentarios = await prisma.comentario.findMany({
       where: {
         postId,
+        respostaAId: null,
       },
       orderBy: {
         dataCriacao: "asc",
@@ -94,13 +155,46 @@ router.get("/posts/:postId/comentarios", async (req, res: Response) => {
           select: {
             id: true,
             nome: true,
+            username: true,
             foto: true,
+          },
+        },
+        _count: { select: { curtidas: true } },
+        curtidas: {
+          where: { usuarioId: usuarioCurtida },
+          select: { usuarioId: true },
+        },
+        respostas: {
+          orderBy: { dataCriacao: "asc" },
+          include: {
+            usuario: {
+              select: {
+                id: true,
+                nome: true,
+                username: true,
+                foto: true,
+              },
+            },
+            _count: { select: { curtidas: true } },
+            curtidas: {
+              where: { usuarioId: usuarioCurtida },
+              select: { usuarioId: true },
+            },
           },
         },
       },
     });
 
-    return res.status(200).json(comentarios);
+    const comentariosFormatados = comentarios.map(({ curtidas, respostas, ...comentario }) => ({
+      ...comentario,
+      curtidoPorMim: curtidas.length > 0,
+      respostas: respostas.map(({ curtidas: curtidasResposta, ...resposta }) => ({
+        ...resposta,
+        curtidoPorMim: curtidasResposta.length > 0,
+      })),
+    }));
+
+    return res.status(200).json(comentariosFormatados);
   } catch (error) {
     console.error("Erro ao listar comentários", error);
 
@@ -108,7 +202,68 @@ router.get("/posts/:postId/comentarios", async (req, res: Response) => {
       error: "Erro interno",
     });
   }
-});
+  },
+);
+
+// Curtir comentário (idempotente para evitar erros em cliques repetidos).
+router.post(
+  "/comentarios/:id/curtir",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const comentarioId = Number(req.params.id);
+      const usuarioId = req.usuarioId!;
+
+      if (!Number.isInteger(comentarioId) || comentarioId <= 0) {
+        return res.status(400).json({ error: "ID de comentário inválido" });
+      }
+
+      const comentario = await prisma.comentario.findUnique({
+        where: { id: comentarioId },
+        select: { id: true },
+      });
+
+      if (!comentario) {
+        return res.status(404).json({ error: "Comentário não encontrado" });
+      }
+
+      await prisma.comentarioCurtida.upsert({
+        where: { usuarioId_comentarioId: { usuarioId, comentarioId } },
+        create: { usuarioId, comentarioId },
+        update: {},
+      });
+
+      return res.status(200).json({ message: "Comentário curtido" });
+    } catch (error) {
+      console.error("Erro ao curtir comentário", error);
+      return res.status(500).json({ error: "Erro interno" });
+    }
+  },
+);
+
+router.delete(
+  "/comentarios/:id/curtir",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const comentarioId = Number(req.params.id);
+      const usuarioId = req.usuarioId!;
+
+      if (!Number.isInteger(comentarioId) || comentarioId <= 0) {
+        return res.status(400).json({ error: "ID de comentário inválido" });
+      }
+
+      await prisma.comentarioCurtida.deleteMany({
+        where: { usuarioId, comentarioId },
+      });
+
+      return res.status(200).json({ message: "Curtida removida" });
+    } catch (error) {
+      console.error("Erro ao remover curtida do comentário", error);
+      return res.status(500).json({ error: "Erro interno" });
+    }
+  },
+);
 
 // Excluir comentário
 router.delete(

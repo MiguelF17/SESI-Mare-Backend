@@ -354,10 +354,12 @@ router.post("/login", async (req: Request, res: Response) => {
 router.get("/usuarios", async (req: Request, res: Response) => {
   try {
     const usuarios = await prisma.usuario.findMany({
+      orderBy: { username: "asc" },
       select: {
         id: true,
+        nome: true,
         username: true,
-        email: true,
+        foto: true,
       },
     });
 
@@ -429,6 +431,10 @@ router.get(
                   comentarios: true,
                 },
               },
+              curtidas: {
+                where: { usuarioId: usuarioLogadoId ?? -1 },
+                select: { usuarioId: true },
+              },
             },
           },
         },
@@ -451,8 +457,14 @@ router.get(
         }))
         : false;
 
+      const { posts, ...dadosUsuario } = usuario;
+
       return res.status(200).json({
-        ...usuario,
+        ...dadosUsuario,
+        posts: posts.map(({ curtidas, ...post }) => ({
+          ...post,
+          curtidoPorMim: curtidas.length > 0,
+        })),
         seguindoPorMim,
       });
     } catch (error) {
