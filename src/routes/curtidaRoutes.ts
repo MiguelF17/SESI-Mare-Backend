@@ -16,7 +16,10 @@ router.post(
             const post = await prisma.post.findUnique({
                 where: {
                     id: postId
-                }
+                },
+                include: {
+                    usuario: { select: { notificacoesCurtidas: true } },
+                },
             })
 
             if (!post) {
@@ -48,7 +51,7 @@ router.post(
             })
 
             // Criar notificação para o autor do post
-            if (post.usuarioId !== usuarioId) {
+            if (post.usuarioId !== usuarioId && post.usuario.notificacoesCurtidas) {
                 await prisma.notificacao.create({
                     data: {
                         tipo: "curtida",

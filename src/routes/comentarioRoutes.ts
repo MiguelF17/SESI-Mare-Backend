@@ -103,7 +103,13 @@ router.post(
       });
 
       const usuarioNotificado = comentarioRespondido?.usuarioId ?? post.usuarioId;
-      if (usuarioNotificado !== usuarioId) {
+      const preferencias = usuarioNotificado !== usuarioId
+        ? await prisma.usuario.findUnique({
+            where: { id: usuarioNotificado },
+            select: { notificacoesComentarios: true },
+          })
+        : null;
+      if (usuarioNotificado !== usuarioId && preferencias?.notificacoesComentarios) {
         await prisma.notificacao.create({
           data: {
             tipo: "comentario",

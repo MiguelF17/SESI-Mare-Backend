@@ -32,6 +32,9 @@ ultimoEmailVerificacaoEnviadoEm DateTime?
   artistasFavoritos UsuarioArtista[]
   generosFavoritos  UsuarioGenero[]
   preferenciasConcluidas Boolean @default(false)
+  notificacoesCurtidas Boolean @default(true)
+  notificacoesComentarios Boolean @default(true)
+  notificacoesSeguidores Boolean @default(true)
     notificacoesRecebidas Notificacao[] @relation("NotificacoesRecebidas")
   notificacoesEnviadas  Notificacao[] @relation("NotificacoesEnviadas")
 }

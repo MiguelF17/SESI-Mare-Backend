@@ -479,6 +479,61 @@ router.get(
 
 // BUSCAR MEU PERFIL
 router.get(
+  "/usuarios/me/notificacoes/preferencias",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const usuario = await prisma.usuario.findUnique({
+        where: { id: req.usuarioId! },
+        select: {
+          notificacoesCurtidas: true,
+          notificacoesComentarios: true,
+          notificacoesSeguidores: true,
+        },
+      });
+
+      if (!usuario) return res.status(404).json({ error: "Usuário não encontrado" });
+
+      return res.json({
+        curtidas: usuario.notificacoesCurtidas,
+        comentarios: usuario.notificacoesComentarios,
+        seguidores: usuario.notificacoesSeguidores,
+      });
+    } catch (error) {
+      console.error("Erro ao carregar preferências de notificação:", error);
+      return res.status(500).json({ error: "Não foi possível carregar as preferências." });
+    }
+  },
+);
+
+router.put(
+  "/usuarios/me/notificacoes/preferencias",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { curtidas, comentarios, seguidores } = req.body;
+      if ([curtidas, comentarios, seguidores].some((valor) => typeof valor !== "boolean")) {
+        return res.status(400).json({ error: "Informe valores booleanos para cada preferência." });
+      }
+
+      await prisma.usuario.update({
+        where: { id: req.usuarioId! },
+        data: {
+          notificacoesCurtidas: curtidas,
+          notificacoesComentarios: comentarios,
+          notificacoesSeguidores: seguidores,
+        },
+      });
+
+      return res.json({ curtidas, comentarios, seguidores });
+    } catch (error) {
+      console.error("Erro ao salvar preferências de notificação:", error);
+      return res.status(500).json({ error: "Não foi possível salvar as preferências." });
+    }
+  },
+);
+
+router.get(
   "/usuarios/me",
   authMiddleware,
   async (req: AuthRequest, res: Response) => {
