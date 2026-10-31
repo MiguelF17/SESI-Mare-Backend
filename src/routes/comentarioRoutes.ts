@@ -113,6 +113,7 @@ router.post(
             usuarioId: usuarioNotificado,
             atorId: usuarioId,
             postId: post.id,
+            comentarioId: comentario.id,
           },
         });
       }

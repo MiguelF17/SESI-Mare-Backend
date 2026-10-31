@@ -175,10 +175,12 @@ model Notificacao {
   atorId    Int?
   postId    Int?
   musicaId  Int?
+  comentarioId Int?
 
   usuario Usuario @relation("NotificacoesRecebidas", fields: [usuarioId], references: [id], onDelete: Cascade)
 
   ator Usuario? @relation("NotificacoesEnviadas", fields: [atorId], references: [id])
 
   @@index([usuarioId, lida, criadaEm])
+  @@index([comentarioId])
 }

@@ -67,6 +67,13 @@ router.get(
                             notificacao.tipo === "comentario" &&
                             notificacao.atorId
                         ) {
+                            const comentario = notificacao.comentarioId
+                                ? await prisma.comentario.findUnique({
+                                    where: { id: notificacao.comentarioId },
+                                    select: { texto: true },
+                                })
+                                : null;
+
                             const inicio = new Date(
                                 notificacao.criadaEm.getTime() - 5000
                             );
@@ -75,7 +82,7 @@ router.get(
                                 notificacao.criadaEm.getTime() + 5000
                             );
 
-                            const comentario =
+                            const comentarioLegado = comentario ??
                                 await prisma.comentario.findFirst({
                                     where: {
                                         postId: notificacao.postId,
@@ -93,7 +100,7 @@ router.get(
                                     },
                                 });
 
-                            textoComentario = comentario?.texto ?? null;
+                            textoComentario = comentarioLegado?.texto ?? null;
                         }
                     }
 

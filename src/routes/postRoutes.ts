@@ -28,6 +28,10 @@ router.post(
         });
       }
 
+      if (texto.trim().length > 500) {
+        return res.status(400).json({ error: "A publicação pode ter no máximo 500 caracteres" });
+      }
+
       const musica = await prisma.musica.findUnique({
         where: {
           id: idMusica,
@@ -393,6 +397,10 @@ router.patch(
         return res.status(400).json({
           error: "O texto deve ser uma string ou null",
         });
+      }
+
+      if (typeof texto === "string" && texto.trim().length > 500) {
+        return res.status(400).json({ error: "A publicação pode ter no máximo 500 caracteres" });
       }
 
       const post = await prisma.post.findUnique({
