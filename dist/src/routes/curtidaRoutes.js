@@ -1,0 +1,108 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const prismaClient_1 = __importDefault(require("../prismaClient"));
+const authMiddleware_1 = require("../middleware/authMiddleware");
+const router = (0, express_1.Router)();
+// Curtir um post
+router.post("/posts/:id/curtir", authMiddleware_1.authMiddleware, async (req, res) => {
+    try {
+        const postId = Number(req.params.id);
+        const usuarioId = req.usuarioId;
+        const post = await prismaClient_1.default.post.findUnique({
+            where: {
+                id: postId
+            },
+            include: {
+                usuario: { select: { notificacoesCurtidas: true } },
+            },
+        });
+        if (!post) {
+            return res.status(404).json({
+                error: "Post não encontrado"
+            });
+        }
+        const curtidaExistente = await prismaClient_1.default.curtida.findUnique({
+            where: {
+                usuarioId_postId: {
+                    usuarioId,
+                    postId
+                }
+            }
+        });
+        if (curtidaExistente) {
+            return res.status(409).json({
+                error: "Você já curtiu este post"
+            });
+        }
+        const curtida = await prismaClient_1.default.curtida.create({
+            data: {
+                usuarioId,
+                postId
+            }
+        });
+        // Criar notificação para o autor do post
+        if (post.usuarioId !== usuarioId && post.usuario.notificacoesCurtidas) {
+            await prismaClient_1.default.notificacao.create({
+                data: {
+                    tipo: "curtida",
+                    mensagem: "curtiu sua publicação",
+                    usuarioId: post.usuarioId,
+                    atorId: usuarioId,
+                    postId: post.id
+                }
+            });
+        }
+        return res.status(201).json({
+            message: "Post curtido com sucesso",
+            curtida
+        });
+    }
+    catch (error) {
+        console.error("Erro ao curtir post", error);
+        return res.status(500).json({
+            error: "Erro interno"
+        });
+    }
+});
+// Descurtir um post
+router.delete("/posts/:id/curtir", authMiddleware_1.authMiddleware, async (req, res) => {
+    try {
+        const postId = Number(req.params.id);
+        const usuarioId = req.usuarioId;
+        const curtida = await prismaClient_1.default.curtida.findUnique({
+            where: {
+                usuarioId_postId: {
+                    usuarioId,
+                    postId
+                }
+            }
+        });
+        if (!curtida) {
+            return res.status(404).json({
+                error: "Você ainda não curtiu este post"
+            });
+        }
+        await prismaClient_1.default.curtida.delete({
+            where: {
+                usuarioId_postId: {
+                    usuarioId,
+                    postId
+                }
+            }
+        });
+        return res.status(200).json({
+            message: "Curtida removida com sucesso"
+        });
+    }
+    catch (error) {
+        console.error("Erro ao remover curtida", error);
+        return res.status(500).json({
+            error: "Erro interno"
+        });
+    }
+});
+exports.default = router;

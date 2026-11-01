@@ -358,6 +358,22 @@ router.post(
         } catch (error) {
             console.error("Erro ao reenviar verificação:", error);
 
+            // A tentativa não chegou ao destinatário; permita tentar novamente.
+            const identificador =
+                req.body.login ?? req.body.email ?? req.body.username;
+            if (typeof identificador === "string") {
+                await prisma.usuario.updateMany({
+                    where: {
+                        OR: [
+                            { email: identificador.trim().toLowerCase() },
+                            { username: identificador.trim().toLowerCase() },
+                        ],
+                        emailVerificado: false,
+                    },
+                    data: { ultimoEmailVerificacaoEnviadoEm: null },
+                });
+            }
+
             return res.status(500).json({
                 error: "Não foi possível reenviar o e-mail de verificação.",
             });
