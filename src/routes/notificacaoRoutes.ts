@@ -64,7 +64,7 @@ router.get(
                         });
 
                         if (
-                            notificacao.tipo === "comentario" &&
+                            (notificacao.tipo === "comentario" || notificacao.tipo === "mencao") &&
                             notificacao.atorId
                         ) {
                             const comentario = notificacao.comentarioId

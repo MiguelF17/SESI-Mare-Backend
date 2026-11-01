@@ -54,7 +54,7 @@ router.get("/notificacoes", authMiddleware_1.authMiddleware, async (req, res) =>
                         },
                     },
                 });
-                if (notificacao.tipo === "comentario" &&
+                if ((notificacao.tipo === "comentario" || notificacao.tipo === "mencao") &&
                     notificacao.atorId) {
                     const comentario = notificacao.comentarioId
                         ? await prismaClient_1.default.comentario.findUnique({

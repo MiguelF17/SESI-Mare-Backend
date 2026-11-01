@@ -76,11 +76,6 @@ router.post(
           });
         }
 
-        if (comentarioRespondido.respostaAId !== null) {
-          return res.status(400).json({
-            error: "Respostas só podem ser feitas em comentários principais",
-          });
-        }
       }
 
       const comentario = await prisma.comentario.create({
@@ -102,26 +97,63 @@ router.post(
         },
       });
 
-      const usuarioNotificado = comentarioRespondido?.usuarioId ?? post.usuarioId;
-      const preferencias = usuarioNotificado !== usuarioId
-        ? await prisma.usuario.findUnique({
-            where: { id: usuarioNotificado },
-            select: { notificacoesComentarios: true },
-          })
-        : null;
-      if (usuarioNotificado !== usuarioId && preferencias?.notificacoesComentarios) {
-        await prisma.notificacao.create({
-          data: {
-            tipo: "comentario",
-            mensagem: comentarioRespondido
-              ? "respondeu ao seu comentário"
-              : "comentou na sua publicação",
-            usuarioId: usuarioNotificado,
-            atorId: usuarioId,
-            postId: post.id,
-            comentarioId: comentario.id,
-          },
-        });
+      try {
+        const usuarioNotificado = comentarioRespondido?.usuarioId ?? post.usuarioId;
+        const destinatariosNotificados = new Set<number>();
+        const preferencias = usuarioNotificado !== usuarioId
+          ? await prisma.usuario.findUnique({
+              where: { id: usuarioNotificado },
+              select: { notificacoesComentarios: true },
+            })
+          : null;
+
+        if (usuarioNotificado !== usuarioId && preferencias?.notificacoesComentarios) {
+          await prisma.notificacao.create({
+            data: {
+              tipo: "comentario",
+              mensagem: comentarioRespondido
+                ? "respondeu ao seu comentário"
+                : "comentou na sua publicação",
+              usuarioId: usuarioNotificado,
+              atorId: usuarioId,
+              postId: post.id,
+              comentarioId: comentario.id,
+            },
+          });
+          destinatariosNotificados.add(usuarioNotificado);
+        }
+
+        const usernamesMencionados = [...new Set(
+          [...texto.trim().matchAll(/(?:^|[^A-Za-z0-9._])@([A-Za-z0-9._]{3,20})/g)]
+            .map((match) => match[1].toLowerCase())
+        )];
+
+        if (usernamesMencionados.length > 0) {
+          const usuariosMencionados = await prisma.usuario.findMany({
+            where: { username: { in: usernamesMencionados } },
+            select: { id: true, notificacoesComentarios: true },
+          });
+          const notificacoesMencao = usuariosMencionados
+            .filter((usuario) =>
+              usuario.id !== usuarioId &&
+              !destinatariosNotificados.has(usuario.id) &&
+              usuario.notificacoesComentarios
+            )
+            .map((usuario) => ({
+              tipo: "mencao",
+              mensagem: "mencionou você em um comentário",
+              usuarioId: usuario.id,
+              atorId: usuarioId,
+              postId: post.id,
+              comentarioId: comentario.id,
+            }));
+
+          if (notificacoesMencao.length > 0) {
+            await prisma.notificacao.createMany({ data: notificacoesMencao });
+          }
+        }
+      } catch (erroNotificacao) {
+        console.error("Erro ao criar notificações do comentário:", erroNotificacao);
       }
 
       return res.status(201).json(comentario);
@@ -152,7 +184,6 @@ router.get(
     const comentarios = await prisma.comentario.findMany({
       where: {
         postId,
-        respostaAId: null,
       },
       orderBy: {
         dataCriacao: "asc",
@@ -171,37 +202,34 @@ router.get(
           where: { usuarioId: usuarioCurtida },
           select: { usuarioId: true },
         },
-        respostas: {
-          orderBy: { dataCriacao: "asc" },
-          include: {
-            usuario: {
-              select: {
-                id: true,
-                nome: true,
-                username: true,
-                foto: true,
-              },
-            },
-            _count: { select: { curtidas: true } },
-            curtidas: {
-              where: { usuarioId: usuarioCurtida },
-              select: { usuarioId: true },
-            },
-          },
-        },
       },
     });
 
-    const comentariosFormatados = comentarios.map(({ curtidas, respostas, ...comentario }) => ({
-      ...comentario,
-      curtidoPorMim: curtidas.length > 0,
-      respostas: respostas.map(({ curtidas: curtidasResposta, ...resposta }) => ({
-        ...resposta,
-        curtidoPorMim: curtidasResposta.length > 0,
-      })),
-    }));
+    type ComentarioArvore = Omit<(typeof comentarios)[number], "curtidas"> & {
+      curtidoPorMim: boolean;
+      respostas: ComentarioArvore[];
+    };
+    const comentariosFormatados: ComentarioArvore[] = comentarios.map(
+      ({ curtidas, ...comentario }) => ({
+        ...comentario,
+        curtidoPorMim: curtidas.length > 0,
+        respostas: [],
+      }),
+    );
+    const comentariosPorId = new Map(
+      comentariosFormatados.map((comentario) => [comentario.id, comentario]),
+    );
+    const comentariosRaiz: ComentarioArvore[] = [];
 
-    return res.status(200).json(comentariosFormatados);
+    for (const comentario of comentariosFormatados) {
+      const pai = comentario.respostaAId
+        ? comentariosPorId.get(comentario.respostaAId)
+        : undefined;
+      if (pai) pai.respostas.push(comentario);
+      else comentariosRaiz.push(comentario);
+    }
+
+    return res.status(200).json(comentariosRaiz);
   } catch (error) {
     console.error("Erro ao listar comentários", error);
 
