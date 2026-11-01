@@ -2,11 +2,15 @@ import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import prisma from "../prismaClient";
 import jwt from "jsonwebtoken";
-import { authMiddleware, optionalAuthMiddleware, AuthRequest } from "../middleware/authMiddleware";
+import {
+    authMiddleware,
+    optionalAuthMiddleware,
+    AuthRequest
+} from "../middleware/authMiddleware";
 import multer from "multer";
 import cloudinary from "../cloudinary";
-import { createHash } from "crypto";
-// import { randomBytes } from "crypto"; // usado pelo envio de verificação desativado
+import { createHash, randomBytes } from "crypto";
+import { enviarEmailVerificacao } from "../services/emailService";
 
 const router = Router();
 
@@ -103,93 +107,107 @@ router.patch(
 );
 
 // CADASTRAR USUÁRIO
+
 router.post("/usuarios", async (req: Request, res: Response) => {
-  try {
-    const { username, email, senha } = req.body;
+    try {
+        const { username, email, senha } = req.body;
 
-    if (
-      typeof username !== "string" ||
-      typeof email !== "string" ||
-      typeof senha !== "string" ||
-      !username.trim() ||
-      !email.trim() ||
-      !senha
-    ) {
-      return res.status(400).json({
-        error: "Informe username, email e senha.",
-      });
-    }
+        if (
+            typeof username !== "string" ||
+            typeof email !== "string" ||
+            typeof senha !== "string" ||
+            !username.trim() ||
+            !email.trim() ||
+            !senha
+        ) {
+            return res.status(400).json({
+                error: "Informe username, email e senha.",
+            });
+        }
 
-    const usernameNormalizado = username.trim().toLowerCase();
-    const emailNormalizado = email.trim().toLowerCase();
+        const usernameNormalizado = username.trim().toLowerCase();
+        const emailNormalizado = email.trim().toLowerCase();
 
-    const usuarioExistente = await prisma.usuario.findFirst({
-      where: {
-        OR: [
-          { username: usernameNormalizado },
-          { email: emailNormalizado },
-        ],
-      },
-    });
-
-    if (usuarioExistente) {
-      if (usuarioExistente.email === emailNormalizado) {
-        return res.status(409).json({
-          error: "Este email já está cadastrado.",
+        const usuarioExistente = await prisma.usuario.findFirst({
+            where: {
+                OR: [
+                    { username: usernameNormalizado },
+                    { email: emailNormalizado },
+                ],
+            },
         });
-      }
 
-      return res.status(409).json({
-        error: "Este nome de usuário já está em uso.",
-      });
+        if (usuarioExistente) {
+            if (usuarioExistente.email === emailNormalizado) {
+                return res.status(409).json({
+                    error: "Este email já está cadastrado.",
+                });
+            }
+
+            return res.status(409).json({
+                error: "Este nome de usuário já está em uso.",
+            });
+        }
+
+        const senhaHash = await bcrypt.hash(senha, 10);
+        const nome = await gerarNomeUsuario();
+
+        const token = randomBytes(32).toString("hex");
+
+        const tokenHash = createHash("sha256")
+            .update(token)
+            .digest("hex");
+
+        const expiracao = new Date(Date.now() + 60 * 60 * 1000);
+
+        const usuario = await prisma.usuario.create({
+            data: {
+                nome,
+                username: usernameNormalizado,
+                email: emailNormalizado,
+                senhaHash,
+
+                emailVerificado: false,
+                tokenVerificacaoHash: tokenHash,
+                tokenVerificacaoExpiraEm: expiracao,
+                ultimoEmailVerificacaoEnviadoEm: new Date(),
+            },
+        });
+
+        try {
+            await enviarEmailVerificacao({
+                email: emailNormalizado,
+                token,
+            });
+        } catch (erroEmail) {
+            console.error("Erro ao enviar e-mail de verificação:", erroEmail);
+
+            return res.status(502).json({
+                error: "Sua conta foi criada, mas não conseguimos enviar o e-mail. Tente reenviar a verificação.",
+                emailPendente: true,
+            });
+        }
+
+        return res.status(201).json({
+            message: "Conta criada! Verifique seu e-mail para ativar sua conta.",
+            emailPendente: true,
+            usuario: {
+                id: usuario.id,
+                nome: usuario.nome,
+                username: usuario.username,
+                email: usuario.email,
+            },
+        });
+
+    } catch (error) {
+        console.error("Erro ao cadastrar usuário:", error);
+
+        return res.status(500).json({
+            error: "Erro interno ao cadastrar usuário.",
+        });
     }
-
-    const senhaHash = await bcrypt.hash(senha, 10);
-    const nome = await gerarNomeUsuario();
-
-    /* Envio de verificação temporariamente desativado.
-    const token = randomBytes(32).toString("hex");
-    const tokenHash = createHash("sha256").update(token).digest("hex");
-    const expiracao = new Date(Date.now() + 60 * 60 * 1000);
-    */
-
-    const usuario = await prisma.usuario.create({
-      data: {
-        nome,
-        username: usernameNormalizado,
-        email: emailNormalizado,
-        senhaHash,
-        // A verificação por e-mail está temporariamente desativada.
-        emailVerificado: true,
-        /* Reativar junto com o envio de email:
-        tokenVerificacaoHash: tokenHash,
-        tokenVerificacaoExpiraEm: expiracao,
-        ultimoEmailVerificacaoEnviadoEm: new Date(),
-        */
-      },
-    });
-
-    /* Envio de verificação temporariamente desativado.
-    await enviarEmailVerificacao({ email: emailNormalizado, token });
-    */
-
-    return res.status(201).json({
-      message: "Conta criada com sucesso!",
-      usuario: {
-        id: usuario.id,
-        nome: usuario.nome,
-        username: usuario.username,
-        email: usuario.email,
-      },
-    });
-  } catch (error) {
-    console.error("Erro ao cadastrar usuário:", error);
-
-    return res.status(500).json({
-      error: "Erro interno ao cadastrar usuário.",
-    });
-  }
 });
+
 
 // VERIFICAR E-MAIL
 router.post("/usuarios/verificar-email", async (req: Request, res: Response) => {
@@ -256,98 +274,181 @@ router.post("/usuarios/verificar-email", async (req: Request, res: Response) => 
   }
 });
 
-/* REENVIAR E-MAIL DE VERIFICAÇÃO — temporariamente desativado.
-router.post(
-  "/usuarios/reenviar-verificacao",
-  async (req: Request, res: Response) => {
-    try {
-      return res.status(200).json({
-        message: "A verificação por e-mail está temporariamente desativada.",
-      });
-    } catch (error) {
-      console.error("Erro ao reenviar verificação:", error);
+// REENVIAR E-MAIL DE VERIFICAÇÃO 
 
-      return res.status(500).json({
-        error: "Não foi possível reenviar o e-mail de verificação.",
-      });
+router.post(
+    "/usuarios/reenviar-verificacao",
+    async (req: Request, res: Response) => {
+        try {
+            const identificador =
+                req.body.login ??
+                req.body.email ??
+                req.body.username;
+
+            if (
+                typeof identificador !== "string" ||
+                !identificador.trim()
+            ) {
+                return res.status(400).json({
+                    error: "Informe seu e-mail ou username.",
+                });
+            }
+
+            const loginNormalizado = identificador.trim().toLowerCase();
+
+            const usuario = await prisma.usuario.findFirst({
+                where: {
+                    OR: [
+                        { email: loginNormalizado },
+                        { username: loginNormalizado },
+                    ],
+                },
+            });
+
+            if (!usuario || usuario.emailVerificado) {
+                return res.status(200).json({
+                    message: "Se houver uma conta pendente de verificação, enviaremos um e-mail.",
+                });
+            }
+
+            const intervalo = 60 * 1000;
+
+            if (usuario.ultimoEmailVerificacaoEnviadoEm) {
+                const tempoDecorrido =
+                    Date.now() -
+                    usuario.ultimoEmailVerificacaoEnviadoEm.getTime();
+
+                if (tempoDecorrido < intervalo) {
+                    const segundosRestantes = Math.ceil(
+                        (intervalo - tempoDecorrido) / 1000
+                    );
+
+                    return res.status(429).json({
+                        error: `Aguarde ${segundosRestantes} segundos para solicitar outro e-mail.`,
+                    });
+                }
+            }
+
+            const token = randomBytes(32).toString("hex");
+
+            const tokenHash = createHash("sha256")
+                .update(token)
+                .digest("hex");
+
+            const expiracao = new Date(Date.now() + 60 * 60 * 1000);
+
+            await prisma.usuario.update({
+                where: { id: usuario.id },
+                data: {
+                    tokenVerificacaoHash: tokenHash,
+                    tokenVerificacaoExpiraEm: expiracao,
+                    ultimoEmailVerificacaoEnviadoEm: new Date(),
+                },
+            });
+
+            await enviarEmailVerificacao({
+                email: usuario.email,
+                token,
+            });
+
+            return res.status(200).json({
+                message: "E-mail de verificação enviado com sucesso!",
+            });
+
+        } catch (error) {
+            console.error("Erro ao reenviar verificação:", error);
+
+            return res.status(500).json({
+                error: "Não foi possível reenviar o e-mail de verificação.",
+            });
+        }
     }
-  }
 );
-*/
+
+
 
 
 // LOGAR USUÁRIO
+
 router.post("/login", async (req: Request, res: Response) => {
-  try {
-    const { login, senha } = req.body;
+    try {
+        const { login, senha } = req.body;
 
-    if (
-      typeof login !== "string" ||
-      typeof senha !== "string" ||
-      !login.trim() ||
-      !senha
-    ) {
-      return res.status(400).json({
-        error: "Informe seu e-mail ou usuário, e senha.",
-      });
+        if (
+            typeof login !== "string" ||
+            typeof senha !== "string" ||
+            !login.trim() ||
+            !senha
+        ) {
+            return res.status(400).json({
+                error: "Informe seu e-mail ou usuário, e senha.",
+            });
+        }
+
+        const loginNormalizado = login.trim().toLowerCase();
+
+        const usuario = await prisma.usuario.findFirst({
+            where: {
+                OR: [
+                    { email: loginNormalizado },
+                    { username: loginNormalizado },
+                ],
+            },
+        });
+
+        if (!usuario) {
+            return res.status(401).json({
+                error: "Username, email ou senha incorretos.",
+            });
+        }
+
+        const senhaValida = await bcrypt.compare(
+            senha,
+            usuario.senhaHash
+        );
+
+        if (!senhaValida) {
+            return res.status(401).json({
+                error: "Username, email ou senha incorretos.",
+            });
+        }
+
+        if (!usuario.emailVerificado) {
+            return res.status(403).json({
+                error: "EMAIL_NAO_VERIFICADO",
+                message: "Você precisa confirmar seu e-mail antes de entrar.",
+            });
+        }
+
+        const token = jwt.sign(
+            {
+                usuarioId: usuario.id,
+            },
+            process.env.JWT_SECRET!,
+            {
+                expiresIn: "8h",
+            }
+        );
+
+        return res.status(200).json({
+            message: "Login realizado com sucesso",
+            token,
+            usuario: {
+                id: usuario.id,
+                username: usuario.username,
+                email: usuario.email,
+                nome: usuario.nome,
+                preferenciasConcluidas: usuario.preferenciasConcluidas,
+            },
+        });
+
+    } catch (error) {
+        console.error("Erro ao fazer login:", error);
+
+        return res.status(500).json({
+            error: "Erro interno",
+        });
     }
-
-    const loginNormalizado = login.trim().toLowerCase();
-
-    const usuario = await prisma.usuario.findFirst({
-      where: {
-        OR: [
-          { email: loginNormalizado },
-          { username: loginNormalizado },
-        ],
-      },
-    });
-
-    if (!usuario) {
-      return res.status(401).json({
-        error: "Username, email ou senha incorretos.",
-      });
-    }
-
-    const senhaValida = await bcrypt.compare(
-      senha,
-      usuario.senhaHash
-    );
-
-    if (!senhaValida) {
-      return res.status(401).json({
-        error: "Username, email ou senha incorretos.",
-      });
-    }
-
-    const token = jwt.sign(
-      {
-        usuarioId: usuario.id,
-      },
-      process.env.JWT_SECRET!,
-      {
-        expiresIn: "8h",
-      },
-    );
-
-    return res.status(200).json({
-      message: "Login realizado com sucesso",
-      token,
-      usuario: {
-        id: usuario.id,
-        username: usuario.username,
-        email: usuario.email,
-        nome: usuario.nome,
-        preferenciasConcluidas: usuario.preferenciasConcluidas,
-      },
-    });
-  } catch (error) {
-    console.error("Erro ao fazer login", error);
-
-    return res.status(500).json({
-      error: "Erro interno",
-    });
-  }
 });
 
 // LISTAR USUÁRIOS
