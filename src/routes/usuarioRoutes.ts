@@ -702,6 +702,29 @@ router.get(
   },
 );
 
+// EXCLUIR MINHA CONTA
+router.delete(
+  "/usuarios/me",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      await prisma.usuario.delete({
+        where: { id: req.usuarioId! },
+      });
+
+      return res.status(200).json({
+        message: "Conta excluída com sucesso.",
+      });
+    } catch (error) {
+      console.error("Erro ao excluir conta:", error);
+
+      return res.status(500).json({
+        error: "Não foi possível excluir sua conta.",
+      });
+    }
+  },
+);
+
 // EDITAR MEU PERFIL
 router.put(
   "/usuarios/me",

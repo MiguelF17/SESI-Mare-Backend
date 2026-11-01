@@ -558,6 +558,23 @@ router.get("/usuarios/me", authMiddleware_1.authMiddleware, async (req, res) => 
         });
     }
 });
+// EXCLUIR MINHA CONTA
+router.delete("/usuarios/me", authMiddleware_1.authMiddleware, async (req, res) => {
+    try {
+        await prismaClient_1.default.usuario.delete({
+            where: { id: req.usuarioId },
+        });
+        return res.status(200).json({
+            message: "Conta excluída com sucesso.",
+        });
+    }
+    catch (error) {
+        console.error("Erro ao excluir conta:", error);
+        return res.status(500).json({
+            error: "Não foi possível excluir sua conta.",
+        });
+    }
+});
 // EDITAR MEU PERFIL
 router.put("/usuarios/me", authMiddleware_1.authMiddleware, async (req, res) => {
     try {
