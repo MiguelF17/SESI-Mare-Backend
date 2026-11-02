@@ -297,16 +297,16 @@ router.post("/usuarios/reenviar-verificacao", async (req, res) => {
     }
 });
 // LOGAR USUÁRIO
-// Envia um link de uso único, sem revelar se o e-mail existe.
+// Envia um link de uso único para o e-mail cadastrado.
 router.post("/usuarios/recuperar-senha", async (req, res) => {
     const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
     if (!email)
         return res.status(400).json({ error: "Informe seu e-mail." });
-    const resposta = { message: "Se houver uma conta vinculada a esse e-mail, enviaremos um link para redefinir a senha." };
     try {
         const usuario = await prismaClient_1.default.usuario.findUnique({ where: { email } });
-        if (!usuario)
-            return res.status(200).json(resposta);
+        if (!usuario) {
+            return res.status(404).json({ error: "Este e-mail não está cadastrado." });
+        }
         const token = (0, crypto_1.randomBytes)(32).toString("hex");
         const tokenHash = (0, crypto_1.createHash)("sha256").update(token).digest("hex");
         await prismaClient_1.default.usuario.update({
@@ -319,12 +319,13 @@ router.post("/usuarios/recuperar-senha", async (req, res) => {
         catch (erro) {
             console.error("Falha no envio de e-mail de redefinição:", erro);
             await prismaClient_1.default.usuario.update({ where: { id: usuario.id }, data: { tokenRedefinicaoSenhaHash: null, tokenRedefinicaoSenhaExpiraEm: null } });
+            return res.status(502).json({ error: "Não foi possível enviar o link agora. Tente novamente mais tarde." });
         }
-        return res.status(200).json(resposta);
+        return res.status(200).json({ message: "Link de redefinição enviado para o e-mail cadastrado." });
     }
     catch (erro) {
         console.error("Erro ao solicitar redefinição de senha:", erro);
-        return res.status(200).json(resposta);
+        return res.status(500).json({ error: "Não foi possível solicitar o link de redefinição." });
     }
 });
 router.post("/usuarios/redefinir-senha", async (req, res) => {
@@ -436,6 +437,69 @@ router.get("/usuarios", async (req, res) => {
         return res.status(500).json({
             error: "Erro interno",
         });
+    }
+});
+// Estatísticas agregadas do universo musical pessoal; não envia o histórico inteiro ao app.
+router.get("/usuarios/me/universo", authMiddleware_1.authMiddleware, async (req, res) => {
+    try {
+        const usuarioId = req.usuarioId;
+        const filtroPosts = { usuarioId };
+        const [totalAvaliacoes, media, distribuicao, generos, artistas, totalSalvas] = await Promise.all([
+            prismaClient_1.default.post.count({ where: filtroPosts }),
+            prismaClient_1.default.post.aggregate({
+                where: filtroPosts,
+                _avg: { nota: true },
+            }),
+            prismaClient_1.default.post.groupBy({
+                by: ["nota"],
+                where: filtroPosts,
+                _count: { _all: true },
+                orderBy: { nota: "asc" },
+            }),
+            prismaClient_1.default.musica.groupBy({
+                by: ["genero"],
+                where: { posts: { some: filtroPosts } },
+                _count: { _all: true },
+                orderBy: { _count: { id: "desc" } },
+            }),
+            prismaClient_1.default.musica.groupBy({
+                by: ["artistaId"],
+                where: { posts: { some: filtroPosts } },
+                _count: { _all: true },
+                orderBy: { _count: { id: "desc" } },
+                take: 5,
+            }),
+            prismaClient_1.default.salvamento.count({ where: { usuarioId } }),
+        ]);
+        const dadosArtistas = await prismaClient_1.default.artista.findMany({
+            where: { id: { in: artistas.map((item) => item.artistaId) } },
+            select: { id: true, nome: true, fotoURL: true },
+        });
+        const contagemPorArtista = new Map(artistas.map((item) => [item.artistaId, item._count._all]));
+        return res.status(200).json({
+            totalAvaliacoes,
+            totalMusicasSalvas: totalSalvas,
+            totalGeneros: generos.length,
+            mediaGeral: Number((media._avg.nota ?? 0).toFixed(1)),
+            distribuicao: distribuicao.map((item) => ({
+                nota: item.nota,
+                quantidade: item._count._all,
+            })),
+            generos: generos.slice(0, 5).map((item) => ({
+                nome: item.genero,
+                quantidade: item._count._all,
+            })),
+            artistas: dadosArtistas
+                .map((artista) => ({
+                ...artista,
+                quantidade: contagemPorArtista.get(artista.id) ?? 0,
+            }))
+                .sort((a, b) => b.quantidade - a.quantidade),
+        });
+    }
+    catch (error) {
+        console.error("Erro ao buscar universo musical:", error);
+        return res.status(500).json({ error: "Não foi possível carregar seu universo musical." });
     }
 });
 // BUSCAR PERFIL PÚBLICO PELO USERNAME
