@@ -10,7 +10,7 @@ import {
 import multer from "multer";
 import cloudinary from "../cloudinary";
 import { createHash, randomBytes } from "crypto";
-import { enviarEmailVerificacao } from "../services/emailService";
+import { enviarEmailRedefinicaoSenha, enviarEmailVerificacao } from "../services/emailService";
 
 const router = Router();
 
@@ -385,6 +385,66 @@ router.post(
 
 
 // LOGAR USUÁRIO
+
+// Envia um link de uso único, sem revelar se o e-mail existe.
+router.post("/usuarios/recuperar-senha", async (req: Request, res: Response) => {
+    const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    if (!email) return res.status(400).json({ error: "Informe seu e-mail." });
+
+    const resposta = { message: "Se houver uma conta vinculada a esse e-mail, enviaremos um link para redefinir a senha." };
+    try {
+        const usuario = await prisma.usuario.findUnique({ where: { email } });
+        if (!usuario) return res.status(200).json(resposta);
+
+        const token = randomBytes(32).toString("hex");
+        const tokenHash = createHash("sha256").update(token).digest("hex");
+        await prisma.usuario.update({
+            where: { id: usuario.id },
+            data: { tokenRedefinicaoSenhaHash: tokenHash, tokenRedefinicaoSenhaExpiraEm: new Date(Date.now() + 60 * 60 * 1000) },
+        });
+        try {
+            await enviarEmailRedefinicaoSenha({ email: usuario.email, token });
+        } catch (erro) {
+            console.error("Falha no envio de e-mail de redefinição:", erro);
+            await prisma.usuario.update({ where: { id: usuario.id }, data: { tokenRedefinicaoSenhaHash: null, tokenRedefinicaoSenhaExpiraEm: null } });
+        }
+        return res.status(200).json(resposta);
+    } catch (erro) {
+        console.error("Erro ao solicitar redefinição de senha:", erro);
+        return res.status(200).json(resposta);
+    }
+});
+
+router.post("/usuarios/redefinir-senha", async (req: Request, res: Response) => {
+    try {
+        const { token, senha } = req.body;
+        if (typeof token !== "string" || !token || typeof senha !== "string") {
+            return res.status(400).json({ error: "Link inválido ou senha não informada." });
+        }
+        if (senha.length < 8 || senha.length > 128 || !/[a-z]/.test(senha) || !/[A-Z]/.test(senha) || !/[0-9]/.test(senha) || !/[^a-zA-Z0-9]/.test(senha)) {
+            return res.status(400).json({ error: "A senha deve ter 8 a 128 caracteres e incluir maiúscula, minúscula, número e símbolo." });
+        }
+
+        const tokenHash = createHash("sha256").update(token).digest("hex");
+        const usuario = await prisma.usuario.findUnique({ where: { tokenRedefinicaoSenhaHash: tokenHash } });
+        if (!usuario || !usuario.tokenRedefinicaoSenhaExpiraEm || usuario.tokenRedefinicaoSenhaExpiraEm <= new Date()) {
+            return res.status(400).json({ error: "Este link expirou ou já foi utilizado. Solicite outro e-mail." });
+        }
+
+        await prisma.usuario.update({
+            where: { id: usuario.id },
+            data: {
+                senhaHash: await bcrypt.hash(senha, 10),
+                tokenRedefinicaoSenhaHash: null,
+                tokenRedefinicaoSenhaExpiraEm: null,
+            },
+        });
+        return res.json({ message: "Senha redefinida. Você já pode entrar com a nova senha." });
+    } catch (erro) {
+        console.error("Erro ao redefinir senha:", erro);
+        return res.status(500).json({ error: "Não foi possível redefinir a senha." });
+    }
+});
 
 router.post("/login", async (req: Request, res: Response) => {
     try {

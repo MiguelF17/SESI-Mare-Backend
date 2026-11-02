@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.testarEmail = testarEmail;
 exports.enviarEmailVerificacao = enviarEmailVerificacao;
+exports.enviarEmailRedefinicaoSenha = enviarEmailRedefinicaoSenha;
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 function obterConfiguracao() {
     const apiKey = process.env.BREVO_API_KEY;
@@ -228,4 +229,34 @@ async function enviarEmailVerificacao({ email, token, }) {
     const resultado = await response.json();
     console.log("E-mail enviado pelo Brevo:", resultado.messageId);
     return resultado;
+}
+async function enviarEmailRedefinicaoSenha({ email, token, }) {
+    const { apiKey, emailRemetente } = obterConfiguracao();
+    const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, "");
+    if (!frontendUrl)
+        throw new Error("FRONTEND_URL não configurada.");
+    const link = `${frontendUrl}/recuperar-senha?token=${encodeURIComponent(token)}`;
+    const html = `
+    <div style="margin:0;padding:32px;background:#080A10;color:#E4EFFF;font-family:Arial,sans-serif">
+      <div style="max-width:520px;margin:auto;padding:32px;border:1px solid #354052;border-radius:16px;background:#111420">
+        <h1 style="color:#58AAF0">Redefinir sua senha</h1>
+        <p>Recebemos um pedido para redefinir a senha da sua conta Maré. O link vale por uma hora.</p>
+        <p><a href="${link}" style="display:inline-block;padding:14px 22px;border-radius:8px;background:#58AAF0;color:#080A10;text-decoration:none;font-weight:bold">Criar nova senha</a></p>
+        <p style="font-size:12px;color:#AAB8CB">Se você não fez esse pedido, ignore este e-mail. Sua senha continuará a mesma.</p>
+      </div>
+    </div>`;
+    const response = await fetch(BREVO_API_URL, {
+        method: "POST",
+        headers: { "api-key": apiKey, "Content-Type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+            sender: { name: "Maré", email: emailRemetente },
+            to: [{ email }],
+            subject: "Redefina sua senha | Maré",
+            htmlContent: html,
+        }),
+    });
+    if (!response.ok) {
+        console.error("Erro ao enviar e-mail de redefinição pelo Brevo:", await response.text());
+        throw new Error("Não foi possível enviar o e-mail de redefinição.");
+    }
 }

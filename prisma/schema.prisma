@@ -17,6 +17,8 @@ model Usuario {
 tokenVerificacaoHash     String?   @unique
 tokenVerificacaoExpiraEm DateTime?
 ultimoEmailVerificacaoEnviadoEm DateTime?
+  tokenRedefinicaoSenhaHash String? @unique
+  tokenRedefinicaoSenhaExpiraEm DateTime?
   foto         String?
   capa        String?
   bio          String?

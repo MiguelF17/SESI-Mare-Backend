@@ -135,6 +135,8 @@ exports.UsuarioScalarFieldEnum = {
     tokenVerificacaoHash: 'tokenVerificacaoHash',
     tokenVerificacaoExpiraEm: 'tokenVerificacaoExpiraEm',
     ultimoEmailVerificacaoEnviadoEm: 'ultimoEmailVerificacaoEnviadoEm',
+    tokenRedefinicaoSenhaHash: 'tokenRedefinicaoSenhaHash',
+    tokenRedefinicaoSenhaExpiraEm: 'tokenRedefinicaoSenhaExpiraEm',
     foto: 'foto',
     capa: 'capa',
     bio: 'bio',
