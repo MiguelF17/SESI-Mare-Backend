@@ -182,6 +182,10 @@ router.get("/musicas/:id", async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
 
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return res.status(400).json({ error: "ID de música inválido." });
+    }
+
     const musica = await prisma.musica.findUnique({
       where: {
         id,
@@ -242,6 +246,10 @@ router.get("/musicas/:id", async (req: Request, res: Response) => {
 router.put("/musicas/:id", async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
+
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return res.status(400).json({ error: "ID de música inválido." });
+    }
 
     const {
       titulo,
@@ -321,6 +329,10 @@ router.put("/musicas/:id", async (req: Request, res: Response) => {
 router.delete("/musicas/:id", async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
+
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return res.status(400).json({ error: "ID de música inválido." });
+    }
 
     // Verifica se a música existe
     const musica = await prisma.musica.findUnique({

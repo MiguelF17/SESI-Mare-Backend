@@ -1,4 +1,4 @@
-import { Router, Request, Response } from "express";
+import { ErrorRequestHandler, Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import prisma from "../prismaClient";
 import jwt from "jsonwebtoken";
@@ -48,11 +48,26 @@ const upload = multer({
   },
 });
 
+const tratarErroUpload: ErrorRequestHandler = (erro, _req, res, next) => {
+  if (erro instanceof multer.MulterError && erro.code === "LIMIT_FILE_SIZE") {
+    return res.status(413).json({
+      erro: "A imagem ultrapassa o limite de 5 MB. Escolha um arquivo menor.",
+    });
+  }
+
+  if (erro instanceof Error && erro.message === "Envie um arquivo de imagem.") {
+    return res.status(400).json({ erro: erro.message });
+  }
+
+  return next(erro);
+};
+
 // ATUALIZAR FOTO OU CAPA DO PERFIL
 router.patch(
   "/usuarios/me/imagem",
   authMiddleware,
   upload.single("imagem"),
+  tratarErroUpload,
 
   async (req: AuthRequest, res: Response) => {
     try {
@@ -60,9 +75,12 @@ router.patch(
       const usuarioId = req.usuarioId!;
       const { tipo } = req.body;
 
-      console.log(req)
-      console.log("Arquivo recebido:", req.file);
-      console.log("Campos recebidos:", req.body);
+      console.info("Recebendo imagem de perfil", {
+        usuarioId,
+        tipo,
+        tamanhoBytes: req.file?.size,
+        formato: req.file?.mimetype,
+      });
 
       if (!req.file) {
         return res.status(400).json({
