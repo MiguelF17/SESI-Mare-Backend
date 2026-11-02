@@ -38,6 +38,8 @@ app.use(
 
 app.use(express.json());
 
+// A rota específica de recomendações deve vir antes de /musicas/:id.
+app.use("/", musicasRecomendadasRoutes);
 app.use("/", musicaRoutes);
 app.use("/", usuarioRoutes);
 app.use("/", postRoutes);
@@ -48,7 +50,6 @@ app.use("/", salvamentoRoutes);
 app.use("/", artistaRoutes);
 app.use("/", usuarioArtistaRoutes);
 app.use("/", usuarioGeneroRoutes);
-app.use("/", musicasRecomendadasRoutes);
 app.use("/", notificacaoRoutes);
 
 const PORT = process.env.PORT || 3000;
