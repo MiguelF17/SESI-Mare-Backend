@@ -579,7 +579,7 @@ router.get(
       const usuarioId = req.usuarioId!;
       const filtroPosts = { usuarioId };
 
-      const [totalAvaliacoes, media, distribuicao, generos, artistas, totalSalvas] =
+      const [totalAvaliacoes, media, distribuicao, generos, artistas, totalSalvas, trajetoria] =
         await Promise.all([
           prisma.post.count({ where: filtroPosts }),
           prisma.post.aggregate({
@@ -606,6 +606,16 @@ router.get(
             take: 5,
           }),
           prisma.salvamento.count({ where: { usuarioId } }),
+          prisma.$queryRaw<{ mes: string; quantidade: number }[]>`
+            SELECT
+              TO_CHAR(DATE_TRUNC('month', "dataCriacao"), 'YYYY-MM-DD') AS mes,
+              COUNT(*)::integer AS quantidade
+            FROM "Post"
+            WHERE "usuarioId" = ${usuarioId}
+              AND "dataCriacao" >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '5 months'
+            GROUP BY DATE_TRUNC('month', "dataCriacao")
+            ORDER BY DATE_TRUNC('month', "dataCriacao") ASC
+          `,
         ]);
 
       const dadosArtistas = await prisma.artista.findMany({
@@ -635,6 +645,7 @@ router.get(
             quantidade: contagemPorArtista.get(artista.id) ?? 0,
           }))
           .sort((a, b) => b.quantidade - a.quantidade),
+        trajetoria,
       });
     } catch (error) {
       console.error("Erro ao buscar universo musical:", error);
