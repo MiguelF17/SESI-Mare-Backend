@@ -36,6 +36,7 @@ model Usuario {
   conversasIniciadas      ConversaPrivada[]   @relation("ConversaUsuarioUm")
   conversasRecebidas      ConversaPrivada[]   @relation("ConversaUsuarioDois")
   mensagensPrivadas       MensagemPrivada[]   @relation("MensagensEnviadas")
+  tokensPush              TokenNotificacaoPush[]
   preferenciasConcluidas  Boolean             @default(false)
   notificacoesCurtidas    Boolean             @default(true)
   notificacoesComentarios Boolean             @default(true)
@@ -222,4 +223,17 @@ model MensagemPrivada {
 
   @@index([conversaId, id])
   @@index([remetenteId, lidaEm])
+}
+
+model TokenNotificacaoPush {
+  id         Int      @id @default(autoincrement())
+  usuarioId  Int
+  token      String   @unique
+  plataforma String   @default("android")
+  criadoEm   DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
 }

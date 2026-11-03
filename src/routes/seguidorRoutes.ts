@@ -1,6 +1,7 @@
 import { Router, Response } from "express"
 import prisma from "../prismaClient"
 import { authMiddleware, AuthRequest } from "../middleware/authMiddleware"
+import { enviarPushParaUsuario } from "../services/pushNotificationService"
 
 const router = Router()
 
@@ -62,6 +63,11 @@ router.post(
                         usuarioId: seguidoId,
                         atorId: seguidorId
                     }
+                })
+                void enviarPushParaUsuario(seguidoId, {
+                    titulo: "Novo seguidor",
+                    corpo: "Alguém começou a seguir você.",
+                    dados: { tipo: "seguir" },
                 })
             }
 

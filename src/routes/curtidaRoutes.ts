@@ -1,6 +1,7 @@
 import { Router, Response } from "express"
 import prisma from "../prismaClient"
 import { authMiddleware, AuthRequest } from "../middleware/authMiddleware"
+import { enviarPushParaUsuario } from "../services/pushNotificationService"
 
 const router = Router()
 
@@ -60,6 +61,11 @@ router.post(
                         atorId: usuarioId,
                         postId: post.id
                     }
+                })
+                void enviarPushParaUsuario(post.usuarioId, {
+                    titulo: "Nova curtida",
+                    corpo: "Alguém curtiu sua publicação.",
+                    dados: { postId: post.id },
                 })
             }
 

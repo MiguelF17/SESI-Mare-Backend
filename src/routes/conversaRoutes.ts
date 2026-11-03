@@ -1,5 +1,6 @@
 import { Response, Router } from "express";
 import prisma from "../prismaClient";
+import { enviarPushParaUsuario } from "../services/pushNotificationService";
 import { AuthRequest, authMiddleware } from "../middleware/authMiddleware";
 
 const router = Router();
@@ -172,7 +173,7 @@ router.post("/conversas/:id/mensagens", authMiddleware, async (req: AuthRequest,
         id: conversaId,
         OR: [{ usuarioUmId: usuarioId }, { usuarioDoisId: usuarioId }],
       },
-      select: { id: true },
+      select: { id: true, usuarioUmId: true, usuarioDoisId: true },
     });
     if (!conversa) return res.status(404).json({ error: "Conversa não encontrada." });
 
@@ -186,6 +187,20 @@ router.post("/conversas/:id/mensagens", authMiddleware, async (req: AuthRequest,
         data: { atualizadaEm: new Date() },
       }),
     ]);
+
+    const destinatarioId = usuarioId === conversa.usuarioUmId
+      ? conversa.usuarioDoisId
+      : conversa.usuarioUmId;
+    void enviarPushParaUsuario(destinatarioId, {
+      titulo: "Nova mensagem",
+      corpo: "Você recebeu uma mensagem privada na Maré.",
+      dados: {
+        tipo: "mensagem",
+        conversaId,
+        nome: mensagem.remetente.nome,
+        username: mensagem.remetente.username,
+      },
+    });
 
     return res.status(201).json(mensagem);
   } catch (error) {

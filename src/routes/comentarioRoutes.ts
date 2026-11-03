@@ -1,5 +1,6 @@
 import { Router, Response } from "express";
 import prisma from "../prismaClient";
+import { enviarPushParaUsuario } from "../services/pushNotificationService";
 import {
   authMiddleware,
   optionalAuthMiddleware,
@@ -120,6 +121,13 @@ router.post(
               comentarioId: comentario.id,
             },
           });
+          void enviarPushParaUsuario(usuarioNotificado, {
+            titulo: "Novo comentário",
+            corpo: comentarioRespondido
+              ? "Alguém respondeu ao seu comentário."
+              : "Alguém comentou na sua publicação.",
+            dados: { postId: post.id },
+          });
           destinatariosNotificados.add(usuarioNotificado);
         }
 
@@ -150,6 +158,13 @@ router.post(
 
           if (notificacoesMencao.length > 0) {
             await prisma.notificacao.createMany({ data: notificacoesMencao });
+            for (const notificacao of notificacoesMencao) {
+              void enviarPushParaUsuario(notificacao.usuarioId, {
+                titulo: "Você foi mencionado",
+                corpo: "Alguém mencionou você em um comentário.",
+                dados: { postId: post.id },
+              });
+            }
           }
         }
       } catch (erroNotificacao) {

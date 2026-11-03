@@ -8,6 +8,73 @@ import {
 
 const router = Router();
 
+// Informa se este aparelho está ativo sem alterar o registro.
+router.get(
+    "/notificacoes/push-token",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+        const token = typeof req.query.token === "string" ? req.query.token : "";
+        if (!token) return res.status(400).json({ erro: "Informe o token do aparelho." });
+
+        try {
+            const registro = await prisma.tokenNotificacaoPush.findFirst({
+                where: { usuarioId: req.usuarioId!, token },
+                select: { id: true },
+            });
+            return res.status(200).json({ ativado: Boolean(registro) });
+        } catch (erro) {
+            console.error("Erro ao consultar registro push:", erro);
+            return res.status(500).json({ erro: "Não foi possível consultar notificações neste aparelho." });
+        }
+    },
+);
+
+// Registra o aparelho atual para receber alertas push da conta autenticada.
+router.post(
+    "/notificacoes/push-token",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+        const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
+        const plataforma = req.body?.plataforma === "android" ? "android" : null;
+
+        if (!/^Expo(nent)?PushToken\[[^\]]+\]$/.test(token) || !plataforma) {
+            return res.status(400).json({ erro: "Token ou plataforma inválidos." });
+        }
+
+        try {
+            await prisma.tokenNotificacaoPush.upsert({
+                where: { token },
+                update: { usuarioId: req.usuarioId!, plataforma },
+                create: { usuarioId: req.usuarioId!, token, plataforma },
+            });
+            return res.status(200).json({ mensagem: "Este aparelho foi registrado." });
+        } catch (erro) {
+            console.error("Erro ao registrar token push:", erro);
+            return res.status(500).json({ erro: "Não foi possível registrar este aparelho." });
+        }
+    },
+);
+
+// Desativa o envio para este aparelho sem revogar a permissão do Android.
+router.delete(
+    "/notificacoes/push-token",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+        const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
+        if (!token) return res.status(400).json({ erro: "Informe o token do aparelho." });
+
+        try {
+            await prisma.tokenNotificacaoPush.deleteMany({
+                where: { usuarioId: req.usuarioId!, token },
+            });
+            return res.status(200).json({ mensagem: "Notificações desativadas neste aparelho." });
+        } catch (erro) {
+            console.error("Erro ao remover token push:", erro);
+            return res.status(500).json({ erro: "Não foi possível desativar notificações neste aparelho." });
+        }
+    },
+);
+
 // Lista as notificações do usuário logado.
 router.get(
     "/notificacoes",
