@@ -261,6 +261,7 @@ router.post("/usuarios/verificar-email", async (req: Request, res: Response) => 
       await prisma.usuario.update({
         where: { id: usuario.id },
         data: {
+          emailPendente: null,
           tokenVerificacaoHash: null,
           tokenVerificacaoExpiraEm: null,
         },
@@ -274,6 +275,7 @@ router.post("/usuarios/verificar-email", async (req: Request, res: Response) => 
     await prisma.usuario.update({
       where: { id: usuario.id },
       data: {
+        ...(usuario.emailPendente ? { email: usuario.emailPendente, emailPendente: null } : {}),
         emailVerificado: true,
         tokenVerificacaoHash: null,
         tokenVerificacaoExpiraEm: null,
@@ -289,6 +291,83 @@ router.post("/usuarios/verificar-email", async (req: Request, res: Response) => 
     return res.status(500).json({
       error: "Não foi possível verificar o e-mail.",
     });
+  }
+});
+
+// Solicita a troca do e-mail. A alteração só entra em vigor após confirmar o link enviado.
+router.patch("/usuarios/me/email", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const novoEmail = typeof req.body?.novoEmail === "string" ? req.body.novoEmail.trim().toLowerCase() : "";
+    const senhaAtual = typeof req.body?.senhaAtual === "string" ? req.body.senhaAtual : "";
+    if (!/^\S+@\S+\.\S+$/.test(novoEmail) || !senhaAtual) {
+      return res.status(400).json({ error: "Informe um e-mail válido e sua senha atual." });
+    }
+
+    const usuario = await prisma.usuario.findUnique({ where: { id: req.usuarioId! } });
+    if (!usuario || !(await bcrypt.compare(senhaAtual, usuario.senhaHash))) {
+      return res.status(401).json({ error: "A senha atual está incorreta." });
+    }
+    if (novoEmail === usuario.email) {
+      return res.status(400).json({ error: "Esse já é o e-mail atual da sua conta." });
+    }
+
+    const emailEmUso = await prisma.usuario.findFirst({
+      where: { OR: [{ email: novoEmail }, { emailPendente: novoEmail }], NOT: { id: usuario.id } },
+      select: { id: true },
+    });
+    if (emailEmUso) return res.status(409).json({ error: "Esse e-mail já está em uso." });
+
+    const token = randomBytes(32).toString("hex");
+    await prisma.usuario.update({
+      where: { id: usuario.id },
+      data: {
+        emailPendente: novoEmail,
+        tokenVerificacaoHash: createHash("sha256").update(token).digest("hex"),
+        tokenVerificacaoExpiraEm: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+
+    try {
+      await enviarEmailVerificacao({ email: novoEmail, token, alteracao: true });
+    } catch (erroEmail) {
+      await prisma.usuario.update({
+        where: { id: usuario.id },
+        data: { emailPendente: null, tokenVerificacaoHash: null, tokenVerificacaoExpiraEm: null },
+      });
+      throw erroEmail;
+    }
+    return res.json({ message: "Enviamos um link para confirmar seu novo e-mail." });
+  } catch (error) {
+    console.error("Erro ao solicitar troca de e-mail:", error);
+    return res.status(500).json({ error: "Não foi possível solicitar a troca de e-mail." });
+  }
+});
+
+// Troca a senha após confirmar a senha atual e os critérios mínimos de segurança.
+router.patch("/usuarios/me/senha", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const senhaAtual = typeof req.body?.senhaAtual === "string" ? req.body.senhaAtual : "";
+    const novaSenha = typeof req.body?.novaSenha === "string" ? req.body.novaSenha : "";
+    if (!senhaAtual || novaSenha.length < 8 || novaSenha.length > 128 || !/[a-z]/.test(novaSenha) || !/[A-Z]/.test(novaSenha) || !/[0-9]/.test(novaSenha) || !/[^A-Za-z0-9]/.test(novaSenha)) {
+      return res.status(400).json({ error: "A nova senha deve ter de 8 a 128 caracteres, com maiúscula, minúscula, número e símbolo." });
+    }
+
+    const usuario = await prisma.usuario.findUnique({ where: { id: req.usuarioId! } });
+    if (!usuario || !(await bcrypt.compare(senhaAtual, usuario.senhaHash))) {
+      return res.status(401).json({ error: "A senha atual está incorreta." });
+    }
+    if (await bcrypt.compare(novaSenha, usuario.senhaHash)) {
+      return res.status(400).json({ error: "A nova senha deve ser diferente da atual." });
+    }
+
+    await prisma.usuario.update({
+      where: { id: usuario.id },
+      data: { senhaHash: await bcrypt.hash(novaSenha, 10), tokenRedefinicaoSenhaHash: null, tokenRedefinicaoSenhaExpiraEm: null },
+    });
+    return res.json({ message: "Senha alterada com sucesso." });
+  } catch (error) {
+    console.error("Erro ao alterar senha:", error);
+    return res.status(500).json({ error: "Não foi possível alterar a senha." });
   }
 });
 
@@ -522,7 +601,9 @@ router.post("/login", async (req: Request, res: Response) => {
             },
             process.env.JWT_SECRET!,
             {
-                expiresIn: "8h",
+                // O app mantém a sessão no armazenamento local persistente; o prazo longo evita
+                // desconectar o usuário diariamente. A sessão web conserva o prazo curto.
+                expiresIn: req.body?.cliente === "mobile" ? "90d" : "8h",
             }
         );
 
@@ -550,7 +631,17 @@ router.post("/login", async (req: Request, res: Response) => {
 // LISTAR USUÁRIOS
 router.get("/usuarios", async (req: Request, res: Response) => {
   try {
+    const busca = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const usuarios = await prisma.usuario.findMany({
+      where: busca
+        ? {
+            OR: [
+              { username: { contains: busca, mode: "insensitive" } },
+              { nome: { contains: busca, mode: "insensitive" } },
+            ],
+          }
+        : undefined,
+      take: busca ? 8 : undefined,
       orderBy: { username: "asc" },
       select: {
         id: true,
@@ -737,6 +828,17 @@ router.get(
           },
         }))
         : false;
+      const segueDeVolta = usuarioLogadoId
+        ? !!(await prisma.seguidor.findUnique({
+            where: {
+              seguidorId_seguidoId: {
+                seguidorId: usuario.id,
+                seguidoId: usuarioLogadoId,
+              },
+            },
+            select: { seguidorId: true },
+          }))
+        : false;
 
       const { posts, ...dadosUsuario } = usuario;
 
@@ -747,6 +849,7 @@ router.get(
           curtidoPorMim: curtidas.length > 0,
         })),
         seguindoPorMim,
+        segueDeVolta,
       });
     } catch (error) {
       console.error("Erro ao buscar perfil público:", error);

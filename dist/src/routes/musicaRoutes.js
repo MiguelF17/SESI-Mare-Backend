@@ -74,6 +74,9 @@ router.get("/musicas", async (req, res) => {
                     ],
                 }
                 : undefined,
+            // A busca usada pelo seletor do chat é limitada; a listagem do catálogo segue completa.
+            take: search ? 30 : undefined,
+            orderBy: search ? { titulo: "asc" } : undefined,
             include: {
                 artista: true,
                 _count: {
@@ -148,6 +151,9 @@ router.get("/musicas/generos", async (_req, res) => {
 router.get("/musicas/:id", async (req, res) => {
     try {
         const id = Number(req.params.id);
+        if (!Number.isSafeInteger(id) || id <= 0) {
+            return res.status(400).json({ error: "ID de música inválido." });
+        }
         const musica = await prismaClient_1.default.musica.findUnique({
             where: {
                 id,
@@ -198,6 +204,9 @@ router.get("/musicas/:id", async (req, res) => {
 router.put("/musicas/:id", async (req, res) => {
     try {
         const id = Number(req.params.id);
+        if (!Number.isSafeInteger(id) || id <= 0) {
+            return res.status(400).json({ error: "ID de música inválido." });
+        }
         const { titulo, artistaId, genero, duracaoSegundos, capa, spotifyUrl, spotifyId, appleMusicUrl, amazonMusicUrl, youtubeMusicUrl, } = req.body;
         // Verifica se a música existe
         const musicaExistente = await prismaClient_1.default.musica.findUnique({
@@ -258,6 +267,9 @@ router.put("/musicas/:id", async (req, res) => {
 router.delete("/musicas/:id", async (req, res) => {
     try {
         const id = Number(req.params.id);
+        if (!Number.isSafeInteger(id) || id <= 0) {
+            return res.status(400).json({ error: "ID de música inválido." });
+        }
         // Verifica se a música existe
         const musica = await prismaClient_1.default.musica.findUnique({
             where: {

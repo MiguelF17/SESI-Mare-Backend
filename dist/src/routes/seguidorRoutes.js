@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prismaClient_1 = __importDefault(require("../prismaClient"));
 const authMiddleware_1 = require("../middleware/authMiddleware");
+const pushNotificationService_1 = require("../services/pushNotificationService");
 const router = (0, express_1.Router)();
 // Seguir usuário
 router.post("/usuarios/:id/seguir", authMiddleware_1.authMiddleware, async (req, res) => {
@@ -48,6 +49,10 @@ router.post("/usuarios/:id/seguir", authMiddleware_1.authMiddleware, async (req,
         });
         // Notifica o usuário que recebeu um novo seguidor
         if (usuario.notificacoesSeguidores) {
+            const ator = await prismaClient_1.default.usuario.findUnique({
+                where: { id: seguidorId },
+                select: { nome: true, username: true, foto: true },
+            });
             await prismaClient_1.default.notificacao.create({
                 data: {
                     tipo: "seguir",
@@ -55,6 +60,15 @@ router.post("/usuarios/:id/seguir", authMiddleware_1.authMiddleware, async (req,
                     usuarioId: seguidoId,
                     atorId: seguidorId
                 }
+            });
+            void (0, pushNotificationService_1.enviarPushParaUsuario)(seguidoId, {
+                titulo: "Novo seguidor",
+                corpo: `${ator?.nome ?? "Alguém"} começou a seguir você.`,
+                imagem: ator?.foto,
+                dados: {
+                    tipo: "seguir",
+                    username: ator?.username ?? "",
+                },
             });
         }
         return res.status(201).json({

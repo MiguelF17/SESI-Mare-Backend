@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prismaClient_1 = __importDefault(require("../prismaClient"));
+const pushNotificationService_1 = require("../services/pushNotificationService");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = (0, express_1.Router)();
 // Criar comentário
@@ -97,6 +98,16 @@ router.post("/posts/:postId/comentarios", authMiddleware_1.authMiddleware, async
                         comentarioId: comentario.id,
                     },
                 });
+                void (0, pushNotificationService_1.enviarPushParaUsuario)(usuarioNotificado, {
+                    titulo: comentarioRespondido ? "Resposta ao seu comentário" : "Novo comentário",
+                    corpo: `${comentario.usuario.nome}: ${comentario.texto}`,
+                    imagem: comentario.usuario.foto,
+                    dados: {
+                        tipo: "comentario",
+                        postId: post.id,
+                        username: comentario.usuario.username,
+                    },
+                });
                 destinatariosNotificados.add(usuarioNotificado);
             }
             const usernamesMencionados = [...new Set([...texto.trim().matchAll(/(?:^|[^A-Za-z0-9._])@([A-Za-z0-9._]{3,20})/g)]
@@ -120,6 +131,18 @@ router.post("/posts/:postId/comentarios", authMiddleware_1.authMiddleware, async
                 }));
                 if (notificacoesMencao.length > 0) {
                     await prismaClient_1.default.notificacao.createMany({ data: notificacoesMencao });
+                    for (const notificacao of notificacoesMencao) {
+                        void (0, pushNotificationService_1.enviarPushParaUsuario)(notificacao.usuarioId, {
+                            titulo: "Você foi mencionado",
+                            corpo: `${comentario.usuario.nome}: ${comentario.texto}`,
+                            imagem: comentario.usuario.foto,
+                            dados: {
+                                tipo: "mencao",
+                                postId: post.id,
+                                username: comentario.usuario.username,
+                            },
+                        });
+                    }
                 }
             }
         }

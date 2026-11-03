@@ -5,6 +5,69 @@ import { AuthRequest, authMiddleware } from "../middleware/authMiddleware";
 
 const router = Router();
 const tamanhoPagina = 50;
+const marcadorMusica = /^\[\[mare-musica:(\d+)\]\]$/;
+
+async function seguemMutuamente(usuarioUmId: number, usuarioDoisId: number) {
+  const relacoes = await prisma.seguidor.findMany({
+    where: {
+      OR: [
+        { seguidorId: usuarioUmId, seguidoId: usuarioDoisId },
+        { seguidorId: usuarioDoisId, seguidoId: usuarioUmId },
+      ],
+    },
+    select: { seguidorId: true, seguidoId: true },
+  });
+  return relacoes.length === 2;
+}
+
+function idMusicaDaMensagem(texto: string) {
+  const resultado = texto.match(marcadorMusica);
+  return resultado ? Number(resultado[1]) : null;
+}
+
+async function incluirMusicasCompartilhadas(mensagens: any[]) {
+  const ids = [...new Set(mensagens
+    .map((mensagem) => idMusicaDaMensagem(mensagem.texto))
+    .filter((id): id is number => id !== null))];
+  if (!ids.length) return mensagens.map((mensagem) => ({ ...mensagem, musica: null }));
+
+  const musicas = await prisma.musica.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      titulo: true,
+      capa: true,
+      artista: { select: { id: true, nome: true } },
+    },
+  });
+  const porId = new Map(musicas.map((musica) => [musica.id, musica]));
+
+  return mensagens.map((mensagem) => {
+    const musicaId = idMusicaDaMensagem(mensagem.texto);
+    return { ...mensagem, musica: musicaId ? porId.get(musicaId) ?? null : null };
+  });
+}
+
+// Contagem enxuta para o indicador de mensagens não lidas na navbar.
+router.get("/conversas/nao-lidas/quantidade", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const quantidade = await prisma.mensagemPrivada.count({
+      where: {
+        lidaEm: null,
+        remetenteId: { not: req.usuarioId! },
+        conversa: {
+          is: {
+            OR: [{ usuarioUmId: req.usuarioId! }, { usuarioDoisId: req.usuarioId! }],
+          },
+        },
+      },
+    });
+    return res.status(200).json({ quantidade });
+  } catch (error) {
+    console.error("Erro ao contar mensagens não lidas:", error);
+    return res.status(500).json({ error: "Não foi possível contar as mensagens não lidas." });
+  }
+});
 
 const selecaoUsuario = {
   id: true,
@@ -18,13 +81,26 @@ function resumirConversa(conversa: any, usuarioId: number) {
     ? conversa.usuarioDois
     : conversa.usuarioUm;
 
+  const ehUsuarioUm = conversa.usuarioUmId === usuarioId;
+  const ultimaMensagem = conversa.mensagens[0] ?? null;
+
   return {
     id: conversa.id,
     criadaEm: conversa.criadaEm,
     atualizadaEm: conversa.atualizadaEm,
     outroUsuario,
-    ultimaMensagem: conversa.mensagens[0] ?? null,
+    ultimaMensagem: ultimaMensagem
+      ? {
+          ...ultimaMensagem,
+          texto: idMusicaDaMensagem(ultimaMensagem.texto)
+            ? "🎵 Música compartilhada"
+            : ultimaMensagem.texto,
+        }
+      : null,
     mensagensNaoLidas: conversa._count.mensagens,
+    silenciadaPorMim: ehUsuarioUm ? conversa.silenciadaPorUm : conversa.silenciadaPorDois,
+    bloqueadaPorMim: ehUsuarioUm ? conversa.bloqueadaPorUm : conversa.bloqueadaPorDois,
+    bloqueadaPeloOutro: ehUsuarioUm ? conversa.bloqueadaPorDois : conversa.bloqueadaPorUm,
   };
 }
 
@@ -80,6 +156,9 @@ router.post("/conversas", authMiddleware, async (req: AuthRequest, res: Response
     if (!outroUsuarioExiste) {
       return res.status(404).json({ error: "Pessoa não encontrada." });
     }
+    if (!(await seguemMutuamente(usuarioId, outroUsuarioId))) {
+      return res.status(403).json({ error: "Para conversar, vocês precisam seguir um ao outro." });
+    }
 
     const [usuarioUmId, usuarioDoisId] = [usuarioId, outroUsuarioId].sort((a, b) => a - b);
     const conversa = await prisma.conversaPrivada.upsert({
@@ -108,6 +187,91 @@ router.post("/conversas", authMiddleware, async (req: AuthRequest, res: Response
   } catch (error) {
     console.error("Erro ao abrir conversa privada:", error);
     return res.status(500).json({ error: "Não foi possível abrir a conversa." });
+  }
+});
+
+// Devolve o estado de silenciamento e bloqueio da conversa para a pessoa autenticada.
+router.get("/conversas/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const conversaId = Number(req.params.id);
+    const usuarioId = req.usuarioId!;
+    if (!Number.isInteger(conversaId) || conversaId <= 0) {
+      return res.status(400).json({ error: "ID de conversa inválido." });
+    }
+
+    const conversa = await prisma.conversaPrivada.findFirst({
+      where: { id: conversaId, OR: [{ usuarioUmId: usuarioId }, { usuarioDoisId: usuarioId }] },
+    });
+    if (!conversa) return res.status(404).json({ error: "Conversa não encontrada." });
+    return res.status(200).json(resumirConversa({ ...conversa, mensagens: [], _count: { mensagens: 0 } }, usuarioId));
+  } catch (error) {
+    console.error("Erro ao consultar as configurações da conversa:", error);
+    return res.status(500).json({ error: "Não foi possível carregar esta conversa." });
+  }
+});
+
+// Altera o silenciamento ou bloqueio apenas para a conta autenticada.
+router.patch("/conversas/:id/configuracoes", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const conversaId = Number(req.params.id);
+    const usuarioId = req.usuarioId!;
+    if (!Number.isInteger(conversaId) || conversaId <= 0) {
+      return res.status(400).json({ error: "ID de conversa inválido." });
+    }
+    if (typeof req.body?.silenciada !== "boolean" && typeof req.body?.bloqueada !== "boolean") {
+      return res.status(400).json({ error: "Informe se deseja silenciar ou bloquear a conversa." });
+    }
+
+    const conversa = await prisma.conversaPrivada.findFirst({
+      where: { id: conversaId, OR: [{ usuarioUmId: usuarioId }, { usuarioDoisId: usuarioId }] },
+    });
+    if (!conversa) return res.status(404).json({ error: "Conversa não encontrada." });
+
+    const ehUsuarioUm = conversa.usuarioUmId === usuarioId;
+    const alteracoes: Record<string, boolean> = {};
+    if (typeof req.body.silenciada === "boolean") {
+      alteracoes[ehUsuarioUm ? "silenciadaPorUm" : "silenciadaPorDois"] = req.body.silenciada;
+    }
+    if (typeof req.body.bloqueada === "boolean") {
+      alteracoes[ehUsuarioUm ? "bloqueadaPorUm" : "bloqueadaPorDois"] = req.body.bloqueada;
+    }
+
+    const atualizada = await prisma.conversaPrivada.update({
+      where: { id: conversaId },
+      data: alteracoes,
+    });
+    return res.status(200).json(resumirConversa({ ...atualizada, mensagens: [], _count: { mensagens: 0 } }, usuarioId));
+  } catch (error) {
+    console.error("Erro ao atualizar as configurações da conversa:", error);
+    return res.status(500).json({ error: "Não foi possível atualizar esta conversa." });
+  }
+});
+
+// Retorna recibos enxutos das últimas mensagens enviadas por quem consulta.
+router.get("/conversas/:id/leituras", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const conversaId = Number(req.params.id);
+    const usuarioId = req.usuarioId!;
+    if (!Number.isInteger(conversaId) || conversaId <= 0) {
+      return res.status(400).json({ error: "ID de conversa inválido." });
+    }
+
+    const pertence = await prisma.conversaPrivada.findFirst({
+      where: { id: conversaId, OR: [{ usuarioUmId: usuarioId }, { usuarioDoisId: usuarioId }] },
+      select: { id: true },
+    });
+    if (!pertence) return res.status(404).json({ error: "Conversa não encontrada." });
+
+    const mensagensLidas = await prisma.mensagemPrivada.findMany({
+      where: { conversaId, remetenteId: usuarioId, lidaEm: { not: null } },
+      take: tamanhoPagina,
+      orderBy: { id: "desc" },
+      select: { id: true },
+    });
+    return res.status(200).json({ ids: mensagensLidas.map(({ id }) => id) });
+  } catch (error) {
+    console.error("Erro ao buscar recibos de leitura:", error);
+    return res.status(500).json({ error: "Não foi possível atualizar os recibos de leitura." });
   }
 });
 
@@ -148,7 +312,8 @@ router.get("/conversas/:id/mensagens", authMiddleware, async (req: AuthRequest, 
           include: incluirRemetente,
         });
 
-    return res.status(200).json(depoisDe === null ? mensagens.reverse() : mensagens);
+    const mensagensOrdenadas = depoisDe === null ? mensagens.reverse() : mensagens;
+    return res.status(200).json(await incluirMusicasCompartilhadas(mensagensOrdenadas));
   } catch (error) {
     console.error("Erro ao buscar mensagens privadas:", error);
     return res.status(500).json({ error: "Não foi possível carregar as mensagens." });
@@ -160,22 +325,51 @@ router.post("/conversas/:id/mensagens", authMiddleware, async (req: AuthRequest,
   try {
     const conversaId = Number(req.params.id);
     const usuarioId = req.usuarioId!;
-    const texto = typeof req.body?.texto === "string" ? req.body.texto.trim() : "";
+    const textoNormal = typeof req.body?.texto === "string" ? req.body.texto.trim() : "";
+    const musicaId = req.body?.musicaId == null ? null : Number(req.body.musicaId);
 
     if (!Number.isInteger(conversaId) || conversaId <= 0) {
       return res.status(400).json({ error: "ID de conversa inválido." });
     }
-    if (!texto) return res.status(400).json({ error: "Escreva uma mensagem." });
-    if (texto.length > 2000) return res.status(400).json({ error: "A mensagem pode ter no máximo 2.000 caracteres." });
+    if (musicaId === null && !textoNormal) return res.status(400).json({ error: "Escreva uma mensagem." });
+    if (musicaId !== null && (!Number.isSafeInteger(musicaId) || musicaId <= 0)) {
+      return res.status(400).json({ error: "Selecione uma música válida." });
+    }
+    if (textoNormal.length > 2000) return res.status(400).json({ error: "A mensagem pode ter no máximo 2.000 caracteres." });
 
     const conversa = await prisma.conversaPrivada.findFirst({
       where: {
         id: conversaId,
         OR: [{ usuarioUmId: usuarioId }, { usuarioDoisId: usuarioId }],
       },
-      select: { id: true, usuarioUmId: true, usuarioDoisId: true },
+      select: {
+        id: true,
+        usuarioUmId: true,
+        usuarioDoisId: true,
+        bloqueadaPorUm: true,
+        bloqueadaPorDois: true,
+        silenciadaPorUm: true,
+        silenciadaPorDois: true,
+      },
     });
     if (!conversa) return res.status(404).json({ error: "Conversa não encontrada." });
+    const outroUsuarioId = conversa.usuarioUmId === usuarioId ? conversa.usuarioDoisId : conversa.usuarioUmId;
+    if (!(await seguemMutuamente(usuarioId, outroUsuarioId))) {
+      return res.status(403).json({ error: "Para enviar mensagens, vocês precisam seguir um ao outro." });
+    }
+    if (conversa.bloqueadaPorUm || conversa.bloqueadaPorDois) {
+      return res.status(403).json({ error: "Esta conversa está bloqueada e não pode receber mensagens." });
+    }
+
+    let musicaCompartilhada = null;
+    if (musicaId !== null) {
+      musicaCompartilhada = await prisma.musica.findUnique({
+        where: { id: musicaId },
+        select: { id: true, titulo: true, capa: true, artista: { select: { id: true, nome: true } } },
+      });
+      if (!musicaCompartilhada) return res.status(404).json({ error: "Música não encontrada." });
+    }
+    const texto = musicaId !== null ? `[[mare-musica:${musicaId}]]` : textoNormal;
 
     const [mensagem] = await prisma.$transaction([
       prisma.mensagemPrivada.create({
@@ -191,18 +385,29 @@ router.post("/conversas/:id/mensagens", authMiddleware, async (req: AuthRequest,
     const destinatarioId = usuarioId === conversa.usuarioUmId
       ? conversa.usuarioDoisId
       : conversa.usuarioUmId;
-    void enviarPushParaUsuario(destinatarioId, {
-      titulo: "Nova mensagem",
-      corpo: "Você recebeu uma mensagem privada na Maré.",
+    const mensagemComMusica = musicaCompartilhada
+      ? { ...mensagem, musica: musicaCompartilhada }
+      : { ...mensagem, musica: null };
+    const destinatarioSilenciou = destinatarioId === conversa.usuarioUmId
+      ? conversa.silenciadaPorUm
+      : conversa.silenciadaPorDois;
+    if (!destinatarioSilenciou) void enviarPushParaUsuario(destinatarioId, {
+      titulo: `Mensagem de ${mensagem.remetente.nome}`,
+      corpo: musicaCompartilhada
+        ? `Compartilhou: ${musicaCompartilhada.titulo} — ${musicaCompartilhada.artista.nome}`
+        : mensagem.texto,
+      imagem: mensagem.remetente.foto,
+      categoria: "mare_mensagem",
       dados: {
         tipo: "mensagem",
         conversaId,
         nome: mensagem.remetente.nome,
         username: mensagem.remetente.username,
+        foto: mensagem.remetente.foto ?? "",
       },
     });
 
-    return res.status(201).json(mensagem);
+    return res.status(201).json(mensagemComMusica);
   } catch (error) {
     console.error("Erro ao enviar mensagem privada:", error);
     return res.status(500).json({ error: "Não foi possível enviar a mensagem." });

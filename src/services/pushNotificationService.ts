@@ -4,6 +4,8 @@ type DadosPush = {
   titulo: string;
   corpo: string;
   dados?: Record<string, string | number>;
+  imagem?: string | null;
+  categoria?: string;
 };
 
 /** Entrega push sem atrasar nem cancelar a ação principal caso o serviço externo falhe. */
@@ -15,14 +17,22 @@ export async function enviarPushParaUsuario(usuarioId: number, push: DadosPush) 
     });
     if (registros.length === 0) return;
 
+    // Mantém o texto da mensagem no push sem ultrapassar o limite do payload do Expo/Android.
+    const caracteresCorpo = Array.from(push.corpo);
+    const corpo = caracteresCorpo.length > 350
+      ? `${caracteresCorpo.slice(0, 347).join("")}...`
+      : push.corpo;
+
     const mensagens = registros.map(({ token }) => ({
       to: token,
       title: push.titulo,
-      body: push.corpo,
+      body: corpo,
       data: push.dados ?? {},
       channelId: "mare-atividade",
       priority: "high",
       sound: "default",
+      ...(push.imagem ? { richContent: { image: push.imagem } } : {}),
+      ...(push.categoria ? { categoryId: push.categoria } : {}),
     }));
 
     for (let inicio = 0; inicio < mensagens.length; inicio += 100) {

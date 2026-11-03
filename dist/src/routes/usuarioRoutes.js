@@ -38,14 +38,28 @@ const upload = (0, multer_1.default)({
         callback(null, true);
     },
 });
+const tratarErroUpload = (erro, _req, res, next) => {
+    if (erro instanceof multer_1.default.MulterError && erro.code === "LIMIT_FILE_SIZE") {
+        return res.status(413).json({
+            erro: "A imagem ultrapassa o limite de 5 MB. Escolha um arquivo menor.",
+        });
+    }
+    if (erro instanceof Error && erro.message === "Envie um arquivo de imagem.") {
+        return res.status(400).json({ erro: erro.message });
+    }
+    return next(erro);
+};
 // ATUALIZAR FOTO OU CAPA DO PERFIL
-router.patch("/usuarios/me/imagem", authMiddleware_1.authMiddleware, upload.single("imagem"), async (req, res) => {
+router.patch("/usuarios/me/imagem", authMiddleware_1.authMiddleware, upload.single("imagem"), tratarErroUpload, async (req, res) => {
     try {
         const usuarioId = req.usuarioId;
         const { tipo } = req.body;
-        console.log(req);
-        console.log("Arquivo recebido:", req.file);
-        console.log("Campos recebidos:", req.body);
+        console.info("Recebendo imagem de perfil", {
+            usuarioId,
+            tipo,
+            tamanhoBytes: req.file?.size,
+            formato: req.file?.mimetype,
+        });
         if (!req.file) {
             return res.status(400).json({
                 erro: "Nenhuma imagem foi enviada.",
@@ -190,6 +204,7 @@ router.post("/usuarios/verificar-email", async (req, res) => {
             await prismaClient_1.default.usuario.update({
                 where: { id: usuario.id },
                 data: {
+                    emailPendente: null,
                     tokenVerificacaoHash: null,
                     tokenVerificacaoExpiraEm: null,
                 },
@@ -201,6 +216,7 @@ router.post("/usuarios/verificar-email", async (req, res) => {
         await prismaClient_1.default.usuario.update({
             where: { id: usuario.id },
             data: {
+                ...(usuario.emailPendente ? { email: usuario.emailPendente, emailPendente: null } : {}),
                 emailVerificado: true,
                 tokenVerificacaoHash: null,
                 tokenVerificacaoExpiraEm: null,
@@ -215,6 +231,79 @@ router.post("/usuarios/verificar-email", async (req, res) => {
         return res.status(500).json({
             error: "Não foi possível verificar o e-mail.",
         });
+    }
+});
+// Solicita a troca do e-mail. A alteração só entra em vigor após confirmar o link enviado.
+router.patch("/usuarios/me/email", authMiddleware_1.authMiddleware, async (req, res) => {
+    try {
+        const novoEmail = typeof req.body?.novoEmail === "string" ? req.body.novoEmail.trim().toLowerCase() : "";
+        const senhaAtual = typeof req.body?.senhaAtual === "string" ? req.body.senhaAtual : "";
+        if (!/^\S+@\S+\.\S+$/.test(novoEmail) || !senhaAtual) {
+            return res.status(400).json({ error: "Informe um e-mail válido e sua senha atual." });
+        }
+        const usuario = await prismaClient_1.default.usuario.findUnique({ where: { id: req.usuarioId } });
+        if (!usuario || !(await bcryptjs_1.default.compare(senhaAtual, usuario.senhaHash))) {
+            return res.status(401).json({ error: "A senha atual está incorreta." });
+        }
+        if (novoEmail === usuario.email) {
+            return res.status(400).json({ error: "Esse já é o e-mail atual da sua conta." });
+        }
+        const emailEmUso = await prismaClient_1.default.usuario.findFirst({
+            where: { OR: [{ email: novoEmail }, { emailPendente: novoEmail }], NOT: { id: usuario.id } },
+            select: { id: true },
+        });
+        if (emailEmUso)
+            return res.status(409).json({ error: "Esse e-mail já está em uso." });
+        const token = (0, crypto_1.randomBytes)(32).toString("hex");
+        await prismaClient_1.default.usuario.update({
+            where: { id: usuario.id },
+            data: {
+                emailPendente: novoEmail,
+                tokenVerificacaoHash: (0, crypto_1.createHash)("sha256").update(token).digest("hex"),
+                tokenVerificacaoExpiraEm: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            },
+        });
+        try {
+            await (0, emailService_1.enviarEmailVerificacao)({ email: novoEmail, token, alteracao: true });
+        }
+        catch (erroEmail) {
+            await prismaClient_1.default.usuario.update({
+                where: { id: usuario.id },
+                data: { emailPendente: null, tokenVerificacaoHash: null, tokenVerificacaoExpiraEm: null },
+            });
+            throw erroEmail;
+        }
+        return res.json({ message: "Enviamos um link para confirmar seu novo e-mail." });
+    }
+    catch (error) {
+        console.error("Erro ao solicitar troca de e-mail:", error);
+        return res.status(500).json({ error: "Não foi possível solicitar a troca de e-mail." });
+    }
+});
+// Troca a senha após confirmar a senha atual e os critérios mínimos de segurança.
+router.patch("/usuarios/me/senha", authMiddleware_1.authMiddleware, async (req, res) => {
+    try {
+        const senhaAtual = typeof req.body?.senhaAtual === "string" ? req.body.senhaAtual : "";
+        const novaSenha = typeof req.body?.novaSenha === "string" ? req.body.novaSenha : "";
+        if (!senhaAtual || novaSenha.length < 8 || novaSenha.length > 128 || !/[a-z]/.test(novaSenha) || !/[A-Z]/.test(novaSenha) || !/[0-9]/.test(novaSenha) || !/[^A-Za-z0-9]/.test(novaSenha)) {
+            return res.status(400).json({ error: "A nova senha deve ter de 8 a 128 caracteres, com maiúscula, minúscula, número e símbolo." });
+        }
+        const usuario = await prismaClient_1.default.usuario.findUnique({ where: { id: req.usuarioId } });
+        if (!usuario || !(await bcryptjs_1.default.compare(senhaAtual, usuario.senhaHash))) {
+            return res.status(401).json({ error: "A senha atual está incorreta." });
+        }
+        if (await bcryptjs_1.default.compare(novaSenha, usuario.senhaHash)) {
+            return res.status(400).json({ error: "A nova senha deve ser diferente da atual." });
+        }
+        await prismaClient_1.default.usuario.update({
+            where: { id: usuario.id },
+            data: { senhaHash: await bcryptjs_1.default.hash(novaSenha, 10), tokenRedefinicaoSenhaHash: null, tokenRedefinicaoSenhaExpiraEm: null },
+        });
+        return res.json({ message: "Senha alterada com sucesso." });
+    }
+    catch (error) {
+        console.error("Erro ao alterar senha:", error);
+        return res.status(500).json({ error: "Não foi possível alterar a senha." });
     }
 });
 // REENVIAR E-MAIL DE VERIFICAÇÃO 
@@ -397,7 +486,9 @@ router.post("/login", async (req, res) => {
         const token = jsonwebtoken_1.default.sign({
             usuarioId: usuario.id,
         }, process.env.JWT_SECRET, {
-            expiresIn: "8h",
+            // O app mantém a sessão no armazenamento local persistente; o prazo longo evita
+            // desconectar o usuário diariamente. A sessão web conserva o prazo curto.
+            expiresIn: req.body?.cliente === "mobile" ? "90d" : "8h",
         });
         return res.status(200).json({
             message: "Login realizado com sucesso",
@@ -421,7 +512,17 @@ router.post("/login", async (req, res) => {
 // LISTAR USUÁRIOS
 router.get("/usuarios", async (req, res) => {
     try {
+        const busca = typeof req.query.search === "string" ? req.query.search.trim() : "";
         const usuarios = await prismaClient_1.default.usuario.findMany({
+            where: busca
+                ? {
+                    OR: [
+                        { username: { contains: busca, mode: "insensitive" } },
+                        { nome: { contains: busca, mode: "insensitive" } },
+                    ],
+                }
+                : undefined,
+            take: busca ? 8 : undefined,
             orderBy: { username: "asc" },
             select: {
                 id: true,
@@ -444,7 +545,7 @@ router.get("/usuarios/me/universo", authMiddleware_1.authMiddleware, async (req,
     try {
         const usuarioId = req.usuarioId;
         const filtroPosts = { usuarioId };
-        const [totalAvaliacoes, media, distribuicao, generos, artistas, totalSalvas] = await Promise.all([
+        const [totalAvaliacoes, media, distribuicao, generos, artistas, totalSalvas, trajetoria] = await Promise.all([
             prismaClient_1.default.post.count({ where: filtroPosts }),
             prismaClient_1.default.post.aggregate({
                 where: filtroPosts,
@@ -470,6 +571,16 @@ router.get("/usuarios/me/universo", authMiddleware_1.authMiddleware, async (req,
                 take: 5,
             }),
             prismaClient_1.default.salvamento.count({ where: { usuarioId } }),
+            prismaClient_1.default.$queryRaw `
+            SELECT
+              TO_CHAR(DATE_TRUNC('month', "dataCriacao"), 'YYYY-MM-DD') AS mes,
+              COUNT(*)::integer AS quantidade
+            FROM "Post"
+            WHERE "usuarioId" = ${usuarioId}
+              AND "dataCriacao" >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '5 months'
+            GROUP BY DATE_TRUNC('month', "dataCriacao")
+            ORDER BY DATE_TRUNC('month', "dataCriacao") ASC
+          `,
         ]);
         const dadosArtistas = await prismaClient_1.default.artista.findMany({
             where: { id: { in: artistas.map((item) => item.artistaId) } },
@@ -495,6 +606,7 @@ router.get("/usuarios/me/universo", authMiddleware_1.authMiddleware, async (req,
                 quantidade: contagemPorArtista.get(artista.id) ?? 0,
             }))
                 .sort((a, b) => b.quantidade - a.quantidade),
+            trajetoria,
         });
     }
     catch (error) {
@@ -577,6 +689,17 @@ router.get("/usuarios/publico/:username", authMiddleware_1.optionalAuthMiddlewar
                 },
             }))
             : false;
+        const segueDeVolta = usuarioLogadoId
+            ? !!(await prismaClient_1.default.seguidor.findUnique({
+                where: {
+                    seguidorId_seguidoId: {
+                        seguidorId: usuario.id,
+                        seguidoId: usuarioLogadoId,
+                    },
+                },
+                select: { seguidorId: true },
+            }))
+            : false;
         const { posts, ...dadosUsuario } = usuario;
         return res.status(200).json({
             ...dadosUsuario,
@@ -585,6 +708,7 @@ router.get("/usuarios/publico/:username", authMiddleware_1.optionalAuthMiddlewar
                 curtidoPorMim: curtidas.length > 0,
             })),
             seguindoPorMim,
+            segueDeVolta,
         });
     }
     catch (error) {

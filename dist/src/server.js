@@ -18,6 +18,7 @@ const usuarioGeneroRoutes_1 = __importDefault(require("./routes/usuarioGeneroRou
 const usu__rioArtistaRoutes_1 = __importDefault(require("./routes/usu\u00E1rioArtistaRoutes"));
 const musicasRecomendadasRoutes_1 = __importDefault(require("./routes/musicasRecomendadasRoutes"));
 const notificacaoRoutes_1 = __importDefault(require("./routes/notificacaoRoutes"));
+const conversaRoutes_1 = __importDefault(require("./routes/conversaRoutes"));
 const app = (0, express_1.default)();
 const origensPermitidas = [
     "https://mare-amber.vercel.app",
@@ -35,6 +36,8 @@ app.use((0, cors_1.default)({
     credentials: true,
 }));
 app.use(express_1.default.json());
+// A rota específica de recomendações deve vir antes de /musicas/:id.
+app.use("/", musicasRecomendadasRoutes_1.default);
 app.use("/", musicaRoutes_1.default);
 app.use("/", usuarioRoutes_1.default);
 app.use("/", postRoutes_1.default);
@@ -45,8 +48,8 @@ app.use("/", salvamentoRoutes_1.default);
 app.use("/", artistaRoutes_1.default);
 app.use("/", usu__rioArtistaRoutes_1.default);
 app.use("/", usuarioGeneroRoutes_1.default);
-app.use("/", musicasRecomendadasRoutes_1.default);
 app.use("/", notificacaoRoutes_1.default);
+app.use("/", conversaRoutes_1.default);
 const PORT = process.env.PORT || 3000;
 app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`Servidor rodando na porta ${PORT}`);

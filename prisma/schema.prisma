@@ -12,6 +12,7 @@ model Usuario {
   nome                            String    @default("Usuário")
   username                        String    @unique
   email                           String    @unique
+  emailPendente                   String?   @unique
   senhaHash                       String
   emailVerificado                 Boolean   @default(false)
   tokenVerificacaoHash            String?   @unique
@@ -28,21 +29,21 @@ model Usuario {
   curtidas                Curtida[]
   comentarios             Comentario[]
   curtidasComentarios     ComentarioCurtida[]
-  seguindo                Seguidor[]          @relation("seguindo")
-  seguidores              Seguidor[]          @relation("seguidores")
+  seguindo                Seguidor[]             @relation("seguindo")
+  seguidores              Seguidor[]             @relation("seguidores")
   salvamentos             Salvamento[]
   artistasFavoritos       UsuarioArtista[]
   generosFavoritos        UsuarioGenero[]
-  conversasIniciadas      ConversaPrivada[]   @relation("ConversaUsuarioUm")
-  conversasRecebidas      ConversaPrivada[]   @relation("ConversaUsuarioDois")
-  mensagensPrivadas       MensagemPrivada[]   @relation("MensagensEnviadas")
+  conversasIniciadas      ConversaPrivada[]      @relation("ConversaUsuarioUm")
+  conversasRecebidas      ConversaPrivada[]      @relation("ConversaUsuarioDois")
+  mensagensPrivadas       MensagemPrivada[]      @relation("MensagensEnviadas")
   tokensPush              TokenNotificacaoPush[]
-  preferenciasConcluidas  Boolean             @default(false)
-  notificacoesCurtidas    Boolean             @default(true)
-  notificacoesComentarios Boolean             @default(true)
-  notificacoesSeguidores  Boolean             @default(true)
-  notificacoesRecebidas   Notificacao[]       @relation("NotificacoesRecebidas")
-  notificacoesEnviadas    Notificacao[]       @relation("NotificacoesEnviadas")
+  preferenciasConcluidas  Boolean                @default(false)
+  notificacoesCurtidas    Boolean                @default(true)
+  notificacoesComentarios Boolean                @default(true)
+  notificacoesSeguidores  Boolean                @default(true)
+  notificacoesRecebidas   Notificacao[]          @relation("NotificacoesRecebidas")
+  notificacoesEnviadas    Notificacao[]          @relation("NotificacoesEnviadas")
 }
 
 model Musica {
@@ -195,11 +196,15 @@ model Notificacao {
 }
 
 model ConversaPrivada {
-  id            Int      @id @default(autoincrement())
-  usuarioUmId   Int
-  usuarioDoisId Int
-  criadaEm      DateTime @default(now())
-  atualizadaEm  DateTime @updatedAt
+  id                Int      @id @default(autoincrement())
+  usuarioUmId       Int
+  usuarioDoisId     Int
+  criadaEm          DateTime @default(now())
+  atualizadaEm      DateTime @updatedAt
+  silenciadaPorUm   Boolean  @default(false)
+  silenciadaPorDois Boolean  @default(false)
+  bloqueadaPorUm    Boolean  @default(false)
+  bloqueadaPorDois  Boolean  @default(false)
 
   usuarioUm   Usuario           @relation("ConversaUsuarioUm", fields: [usuarioUmId], references: [id], onDelete: Cascade)
   usuarioDois Usuario           @relation("ConversaUsuarioDois", fields: [usuarioDoisId], references: [id], onDelete: Cascade)
@@ -226,11 +231,11 @@ model MensagemPrivada {
 }
 
 model TokenNotificacaoPush {
-  id         Int      @id @default(autoincrement())
-  usuarioId  Int
-  token      String   @unique
-  plataforma String   @default("android")
-  criadoEm   DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  usuarioId    Int
+  token        String   @unique
+  plataforma   String   @default("android")
+  criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)

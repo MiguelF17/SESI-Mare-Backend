@@ -90,6 +90,10 @@ router.get("/musicas", async (req: Request, res: Response) => {
         }
         : undefined,
 
+      // A busca usada pelo seletor do chat é limitada; a listagem do catálogo segue completa.
+      take: search ? 30 : undefined,
+      orderBy: search ? { titulo: "asc" } : undefined,
+
       include: {
         artista: true,
 

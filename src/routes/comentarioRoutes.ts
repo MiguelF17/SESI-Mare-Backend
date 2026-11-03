@@ -122,11 +122,14 @@ router.post(
             },
           });
           void enviarPushParaUsuario(usuarioNotificado, {
-            titulo: "Novo comentário",
-            corpo: comentarioRespondido
-              ? "Alguém respondeu ao seu comentário."
-              : "Alguém comentou na sua publicação.",
-            dados: { postId: post.id },
+            titulo: comentarioRespondido ? "Resposta ao seu comentário" : "Novo comentário",
+            corpo: `${comentario.usuario.nome}: ${comentario.texto}`,
+            imagem: comentario.usuario.foto,
+            dados: {
+              tipo: "comentario",
+              postId: post.id,
+              username: comentario.usuario.username,
+            },
           });
           destinatariosNotificados.add(usuarioNotificado);
         }
@@ -161,8 +164,13 @@ router.post(
             for (const notificacao of notificacoesMencao) {
               void enviarPushParaUsuario(notificacao.usuarioId, {
                 titulo: "Você foi mencionado",
-                corpo: "Alguém mencionou você em um comentário.",
-                dados: { postId: post.id },
+                corpo: `${comentario.usuario.nome}: ${comentario.texto}`,
+                imagem: comentario.usuario.foto,
+                dados: {
+                  tipo: "mencao",
+                  postId: post.id,
+                  username: comentario.usuario.username,
+                },
               });
             }
           }

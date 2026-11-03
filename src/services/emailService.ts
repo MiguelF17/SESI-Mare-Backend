@@ -4,6 +4,7 @@ const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 interface EnviarEmailVerificacao {
   email: string;
   token: string;
+  alteracao?: boolean;
 }
 
 function obterConfiguracao() {
@@ -40,6 +41,7 @@ export async function testarEmail() {
 export async function enviarEmailVerificacao({
   email,
   token,
+  alteracao = false,
 }: EnviarEmailVerificacao) {
   const { apiKey, emailRemetente } = obterConfiguracao();
 
@@ -62,7 +64,7 @@ export async function enviarEmailVerificacao({
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Confirme seu e-mail - Maré</title>
+        <title>${alteracao ? "Confirme seu novo e-mail" : "Confirme seu e-mail"} - Maré</title>
     </head>
 
     <body style="
@@ -113,7 +115,7 @@ export async function enviarEmailVerificacao({
                                     letter-spacing: 2px;
                                     text-transform: uppercase;
                                 ">
-                                    Bem-vindo à Maré
+                                    ${alteracao ? "Confirme a alteração do seu e-mail" : "Bem-vindo à Maré"}
                                 </p>
 
                                 <h1 style="
@@ -122,7 +124,7 @@ export async function enviarEmailVerificacao({
                                     font-size: 27px;
                                     line-height: 1.3;
                                 ">
-                                    Só falta confirmar seu e-mail!
+                                    ${alteracao ? "Confirme seu novo e-mail para concluir a troca." : "Só falta confirmar seu e-mail!"}
                                 </h1>
 
                                 <p style="
@@ -132,7 +134,7 @@ export async function enviarEmailVerificacao({
                                     line-height: 1.8;
                                 ">
                                     Sua conta está quase pronta. Confirme seu endereço
-                                    de e-mail para começar a explorar a comunidade
+                                    ${alteracao ? "Este link expira em 24 horas." : "de e-mail para começar a explorar a comunidade"}
                                     musical da Maré.
                                 </p>
 
@@ -150,7 +152,7 @@ export async function enviarEmailVerificacao({
                                                     text-decoration: none;
                                                     border-radius: 8px;
                                                 ">
-                                                Confirmar meu e-mail
+                                                ${alteracao ? "Confirmar novo e-mail" : "Confirmar meu e-mail"}
                                             </a>
                                         </td>
                                     </tr>
@@ -235,7 +237,7 @@ export async function enviarEmailVerificacao({
           email,
         },
       ],
-      subject: "Confirme seu e-mail | Maré",
+      subject: alteracao ? "Confirme seu novo e-mail | Maré" : "Confirme seu e-mail | Maré",
       htmlContent: html,
     }),
   });

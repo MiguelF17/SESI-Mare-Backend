@@ -56,6 +56,10 @@ router.post(
 
             // Notifica o usuário que recebeu um novo seguidor
             if (usuario.notificacoesSeguidores) {
+                const ator = await prisma.usuario.findUnique({
+                    where: { id: seguidorId },
+                    select: { nome: true, username: true, foto: true },
+                });
                 await prisma.notificacao.create({
                     data: {
                         tipo: "seguir",
@@ -66,8 +70,12 @@ router.post(
                 })
                 void enviarPushParaUsuario(seguidoId, {
                     titulo: "Novo seguidor",
-                    corpo: "Alguém começou a seguir você.",
-                    dados: { tipo: "seguir" },
+                    corpo: `${ator?.nome ?? "Alguém"} começou a seguir você.`,
+                    imagem: ator?.foto,
+                    dados: {
+                        tipo: "seguir",
+                        username: ator?.username ?? "",
+                    },
                 })
             }
 

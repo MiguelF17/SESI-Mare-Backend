@@ -1,0 +1,5 @@
+ALTER TABLE "ConversaPrivada"
+ADD COLUMN "silenciadaPorUm" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "silenciadaPorDois" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "bloqueadaPorUm" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "bloqueadaPorDois" BOOLEAN NOT NULL DEFAULT false;

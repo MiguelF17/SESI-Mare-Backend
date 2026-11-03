@@ -53,6 +53,10 @@ router.post(
 
             // Criar notificação para o autor do post
             if (post.usuarioId !== usuarioId && post.usuario.notificacoesCurtidas) {
+                const ator = await prisma.usuario.findUnique({
+                    where: { id: usuarioId },
+                    select: { nome: true, username: true, foto: true },
+                });
                 await prisma.notificacao.create({
                     data: {
                         tipo: "curtida",
@@ -63,9 +67,14 @@ router.post(
                     }
                 })
                 void enviarPushParaUsuario(post.usuarioId, {
-                    titulo: "Nova curtida",
-                    corpo: "Alguém curtiu sua publicação.",
-                    dados: { postId: post.id },
+                    titulo: "Curtida na sua publicação",
+                    corpo: `${ator?.nome ?? "Alguém"} curtiu sua publicação.`,
+                    imagem: ator?.foto,
+                    dados: {
+                        tipo: "curtida",
+                        postId: post.id,
+                        username: ator?.username ?? "",
+                    },
                 })
             }
 

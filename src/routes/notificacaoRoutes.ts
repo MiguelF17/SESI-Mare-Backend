@@ -8,6 +8,23 @@ import {
 
 const router = Router();
 
+// Devolve somente a contagem para o badge da navegação, sem carregar os detalhes.
+router.get(
+    "/notificacoes/nao-lidas/quantidade",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+        try {
+            const quantidade = await prisma.notificacao.count({
+                where: { usuarioId: req.usuarioId!, lida: false },
+            });
+            return res.status(200).json({ quantidade });
+        } catch (erro) {
+            console.error("Erro ao contar notificações não lidas:", erro);
+            return res.status(500).json({ erro: "Não foi possível contar as notificações." });
+        }
+    },
+);
+
 // Informa se este aparelho está ativo sem alterar o registro.
 router.get(
     "/notificacoes/push-token",
@@ -35,7 +52,9 @@ router.post(
     authMiddleware,
     async (req: AuthRequest, res: Response) => {
         const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
-        const plataforma = req.body?.plataforma === "android" ? "android" : null;
+        const plataforma = req.body?.plataforma === "android" || req.body?.plataforma === "ios"
+            ? req.body.plataforma
+            : null;
 
         if (!/^Expo(nent)?PushToken\[[^\]]+\]$/.test(token) || !plataforma) {
             return res.status(400).json({ erro: "Token ou plataforma inválidos." });
@@ -55,7 +74,7 @@ router.post(
     },
 );
 
-// Desativa o envio para este aparelho sem revogar a permissão do Android.
+// Desativa o envio para este aparelho sem revogar a permissão do sistema.
 router.delete(
     "/notificacoes/push-token",
     authMiddleware,
@@ -125,6 +144,14 @@ router.get(
                                                 nome: true,
                                             },
                                         },
+                                    },
+                                },
+                                usuario: {
+                                    select: {
+                                        id: true,
+                                        nome: true,
+                                        username: true,
+                                        foto: true,
                                     },
                                 },
                             },
@@ -200,6 +227,28 @@ router.get(
 );
 
 // Marca uma notificação específica como lida.
+router.delete(
+    "/notificacoes",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+        try {
+            const resultado = await prisma.notificacao.deleteMany({
+                where: { usuarioId: req.usuarioId! },
+            });
+
+            return res.json({
+                mensagem: "Notificações removidas.",
+                quantidade: resultado.count,
+            });
+        } catch (error) {
+            console.error("Erro ao limpar notificações:", error);
+            return res.status(500).json({
+                erro: "Não foi possível limpar as notificações.",
+            });
+        }
+    }
+);
+
 router.patch(
     "/notificacoes/:id/lida",
     authMiddleware,

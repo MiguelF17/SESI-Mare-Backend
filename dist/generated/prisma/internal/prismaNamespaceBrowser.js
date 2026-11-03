@@ -48,7 +48,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NullsOrder = exports.QueryMode = exports.SortOrder = exports.NotificacaoScalarFieldEnum = exports.UsuarioGeneroScalarFieldEnum = exports.UsuarioArtistaScalarFieldEnum = exports.SalvamentoScalarFieldEnum = exports.SeguidorScalarFieldEnum = exports.ComentarioCurtidaScalarFieldEnum = exports.ComentarioScalarFieldEnum = exports.CurtidaScalarFieldEnum = exports.PostScalarFieldEnum = exports.ArtistaScalarFieldEnum = exports.MusicaScalarFieldEnum = exports.UsuarioScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.Decimal = void 0;
+exports.NullsOrder = exports.QueryMode = exports.SortOrder = exports.TokenNotificacaoPushScalarFieldEnum = exports.MensagemPrivadaScalarFieldEnum = exports.ConversaPrivadaScalarFieldEnum = exports.NotificacaoScalarFieldEnum = exports.UsuarioGeneroScalarFieldEnum = exports.UsuarioArtistaScalarFieldEnum = exports.SalvamentoScalarFieldEnum = exports.SeguidorScalarFieldEnum = exports.ComentarioCurtidaScalarFieldEnum = exports.ComentarioScalarFieldEnum = exports.CurtidaScalarFieldEnum = exports.PostScalarFieldEnum = exports.ArtistaScalarFieldEnum = exports.MusicaScalarFieldEnum = exports.UsuarioScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.Decimal = void 0;
 const runtime = __importStar(require("@prisma/client/runtime/index-browser"));
 exports.Decimal = runtime.Decimal;
 exports.NullTypes = {
@@ -86,7 +86,10 @@ exports.ModelName = {
     Salvamento: 'Salvamento',
     UsuarioArtista: 'UsuarioArtista',
     UsuarioGenero: 'UsuarioGenero',
-    Notificacao: 'Notificacao'
+    Notificacao: 'Notificacao',
+    ConversaPrivada: 'ConversaPrivada',
+    MensagemPrivada: 'MensagemPrivada',
+    TokenNotificacaoPush: 'TokenNotificacaoPush'
 };
 /*
  * Enums
@@ -102,6 +105,7 @@ exports.UsuarioScalarFieldEnum = {
     nome: 'nome',
     username: 'username',
     email: 'email',
+    emailPendente: 'emailPendente',
     senhaHash: 'senhaHash',
     emailVerificado: 'emailVerificado',
     tokenVerificacaoHash: 'tokenVerificacaoHash',
@@ -193,6 +197,33 @@ exports.NotificacaoScalarFieldEnum = {
     postId: 'postId',
     musicaId: 'musicaId',
     comentarioId: 'comentarioId'
+};
+exports.ConversaPrivadaScalarFieldEnum = {
+    id: 'id',
+    usuarioUmId: 'usuarioUmId',
+    usuarioDoisId: 'usuarioDoisId',
+    criadaEm: 'criadaEm',
+    atualizadaEm: 'atualizadaEm',
+    silenciadaPorUm: 'silenciadaPorUm',
+    silenciadaPorDois: 'silenciadaPorDois',
+    bloqueadaPorUm: 'bloqueadaPorUm',
+    bloqueadaPorDois: 'bloqueadaPorDois'
+};
+exports.MensagemPrivadaScalarFieldEnum = {
+    id: 'id',
+    conversaId: 'conversaId',
+    remetenteId: 'remetenteId',
+    texto: 'texto',
+    criadaEm: 'criadaEm',
+    lidaEm: 'lidaEm'
+};
+exports.TokenNotificacaoPushScalarFieldEnum = {
+    id: 'id',
+    usuarioId: 'usuarioId',
+    token: 'token',
+    plataforma: 'plataforma',
+    criadoEm: 'criadoEm',
+    atualizadoEm: 'atualizadoEm'
 };
 exports.SortOrder = {
     asc: 'asc',

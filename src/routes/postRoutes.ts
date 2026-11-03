@@ -85,6 +85,15 @@ router.get(
       }
 
       const somenteSeguindo = req.query.seguindo === "true";
+      const limiteSolicitado = req.query.limit === undefined ? undefined : Number(req.query.limit);
+      const deslocamento = req.query.offset === undefined ? 0 : Number(req.query.offset);
+
+      if (
+        (limiteSolicitado !== undefined && (!Number.isInteger(limiteSolicitado) || limiteSolicitado < 1 || limiteSolicitado > 50)) ||
+        !Number.isInteger(deslocamento) || deslocamento < 0
+      ) {
+        return res.status(400).json({ error: "Parâmetros de paginação inválidos." });
+      }
 
       let usuariosSeguidos: number[] = [];
 
@@ -123,6 +132,9 @@ router.get(
         orderBy: {
           dataCriacao: "desc",
         },
+        ...(limiteSolicitado !== undefined
+          ? { take: limiteSolicitado, skip: deslocamento }
+          : {}),
 
         include: {
           usuario: {

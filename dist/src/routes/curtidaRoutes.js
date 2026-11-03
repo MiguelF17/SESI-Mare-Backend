@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prismaClient_1 = __importDefault(require("../prismaClient"));
 const authMiddleware_1 = require("../middleware/authMiddleware");
+const pushNotificationService_1 = require("../services/pushNotificationService");
 const router = (0, express_1.Router)();
 // Curtir um post
 router.post("/posts/:id/curtir", authMiddleware_1.authMiddleware, async (req, res) => {
@@ -46,6 +47,10 @@ router.post("/posts/:id/curtir", authMiddleware_1.authMiddleware, async (req, re
         });
         // Criar notificação para o autor do post
         if (post.usuarioId !== usuarioId && post.usuario.notificacoesCurtidas) {
+            const ator = await prismaClient_1.default.usuario.findUnique({
+                where: { id: usuarioId },
+                select: { nome: true, username: true, foto: true },
+            });
             await prismaClient_1.default.notificacao.create({
                 data: {
                     tipo: "curtida",
@@ -54,6 +59,16 @@ router.post("/posts/:id/curtir", authMiddleware_1.authMiddleware, async (req, re
                     atorId: usuarioId,
                     postId: post.id
                 }
+            });
+            void (0, pushNotificationService_1.enviarPushParaUsuario)(post.usuarioId, {
+                titulo: "Curtida na sua publicação",
+                corpo: `${ator?.nome ?? "Alguém"} curtiu sua publicação.`,
+                imagem: ator?.foto,
+                dados: {
+                    tipo: "curtida",
+                    postId: post.id,
+                    username: ator?.username ?? "",
+                },
             });
         }
         return res.status(201).json({
