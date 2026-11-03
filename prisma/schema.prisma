@@ -8,37 +8,40 @@ datasource db {
 }
 
 model Usuario {
-  id           Int      @id @default(autoincrement())
-  nome         String @default("Usuário")
-  username     String @unique
-  email        String   @unique
-  senhaHash    String
-  emailVerificado          Boolean   @default(false)
-tokenVerificacaoHash     String?   @unique
-tokenVerificacaoExpiraEm DateTime?
-ultimoEmailVerificacaoEnviadoEm DateTime?
-  tokenRedefinicaoSenhaHash String? @unique
-  tokenRedefinicaoSenhaExpiraEm DateTime?
-  foto         String?
-  capa        String?
-  bio          String?
-  dataCadastro DateTime @default(now())
+  id                              Int       @id @default(autoincrement())
+  nome                            String    @default("Usuário")
+  username                        String    @unique
+  email                           String    @unique
+  senhaHash                       String
+  emailVerificado                 Boolean   @default(false)
+  tokenVerificacaoHash            String?   @unique
+  tokenVerificacaoExpiraEm        DateTime?
+  ultimoEmailVerificacaoEnviadoEm DateTime?
+  tokenRedefinicaoSenhaHash       String?   @unique
+  tokenRedefinicaoSenhaExpiraEm   DateTime?
+  foto                            String?
+  capa                            String?
+  bio                             String?
+  dataCadastro                    DateTime  @default(now())
 
-  posts             Post[]
-  curtidas          Curtida[]
-  comentarios       Comentario[]
-  curtidasComentarios ComentarioCurtida[]
-  seguindo          Seguidor[]       @relation("seguindo")
-  seguidores        Seguidor[]       @relation("seguidores")
-  salvamentos       Salvamento[]
-  artistasFavoritos UsuarioArtista[]
-  generosFavoritos  UsuarioGenero[]
-  preferenciasConcluidas Boolean @default(false)
-  notificacoesCurtidas Boolean @default(true)
-  notificacoesComentarios Boolean @default(true)
-  notificacoesSeguidores Boolean @default(true)
-    notificacoesRecebidas Notificacao[] @relation("NotificacoesRecebidas")
-  notificacoesEnviadas  Notificacao[] @relation("NotificacoesEnviadas")
+  posts                   Post[]
+  curtidas                Curtida[]
+  comentarios             Comentario[]
+  curtidasComentarios     ComentarioCurtida[]
+  seguindo                Seguidor[]          @relation("seguindo")
+  seguidores              Seguidor[]          @relation("seguidores")
+  salvamentos             Salvamento[]
+  artistasFavoritos       UsuarioArtista[]
+  generosFavoritos        UsuarioGenero[]
+  conversasIniciadas      ConversaPrivada[]   @relation("ConversaUsuarioUm")
+  conversasRecebidas      ConversaPrivada[]   @relation("ConversaUsuarioDois")
+  mensagensPrivadas       MensagemPrivada[]   @relation("MensagensEnviadas")
+  preferenciasConcluidas  Boolean             @default(false)
+  notificacoesCurtidas    Boolean             @default(true)
+  notificacoesComentarios Boolean             @default(true)
+  notificacoesSeguidores  Boolean             @default(true)
+  notificacoesRecebidas   Notificacao[]       @relation("NotificacoesRecebidas")
+  notificacoesEnviadas    Notificacao[]       @relation("NotificacoesEnviadas")
 }
 
 model Musica {
@@ -49,9 +52,9 @@ model Musica {
   genero          String
   duracaoSegundos Int
   capa            String?
-  
+
   spotifyUrl      String?
-    appleMusicUrl   String?
+  appleMusicUrl   String?
   amazonMusicUrl  String?
   youtubeMusicUrl String?
 
@@ -107,21 +110,21 @@ model Comentario {
   editado     Boolean  @default(false)
   respostaAId Int?
 
-  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
-  respostaA Comentario? @relation("RespostasComentario", fields: [respostaAId], references: [id], onDelete: Cascade)
-  respostas Comentario[] @relation("RespostasComentario")
-  curtidas   ComentarioCurtida[]
+  usuario   Usuario             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  post      Post                @relation(fields: [postId], references: [id], onDelete: Cascade)
+  respostaA Comentario?         @relation("RespostasComentario", fields: [respostaAId], references: [id], onDelete: Cascade)
+  respostas Comentario[]        @relation("RespostasComentario")
+  curtidas  ComentarioCurtida[]
 
   @@index([respostaAId])
 }
 
 model ComentarioCurtida {
-  usuarioId   Int
+  usuarioId    Int
   comentarioId Int
-  dataCriacao DateTime @default(now())
+  dataCriacao  DateTime @default(now())
 
-  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario    Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   comentario Comentario @relation(fields: [comentarioId], references: [id], onDelete: Cascade)
 
   @@id([usuarioId, comentarioId])
@@ -170,16 +173,16 @@ model UsuarioGenero {
 }
 
 model Notificacao {
-  id        Int      @id @default(autoincrement())
-  tipo      String
-  mensagem  String
-  lida      Boolean  @default(false)
-  criadaEm  DateTime @default(now())
+  id       Int      @id @default(autoincrement())
+  tipo     String
+  mensagem String
+  lida     Boolean  @default(false)
+  criadaEm DateTime @default(now())
 
-  usuarioId Int
-  atorId    Int?
-  postId    Int?
-  musicaId  Int?
+  usuarioId    Int
+  atorId       Int?
+  postId       Int?
+  musicaId     Int?
   comentarioId Int?
 
   usuario Usuario @relation("NotificacoesRecebidas", fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -188,4 +191,35 @@ model Notificacao {
 
   @@index([usuarioId, lida, criadaEm])
   @@index([comentarioId])
+}
+
+model ConversaPrivada {
+  id            Int      @id @default(autoincrement())
+  usuarioUmId   Int
+  usuarioDoisId Int
+  criadaEm      DateTime @default(now())
+  atualizadaEm  DateTime @updatedAt
+
+  usuarioUm   Usuario           @relation("ConversaUsuarioUm", fields: [usuarioUmId], references: [id], onDelete: Cascade)
+  usuarioDois Usuario           @relation("ConversaUsuarioDois", fields: [usuarioDoisId], references: [id], onDelete: Cascade)
+  mensagens   MensagemPrivada[]
+
+  @@unique([usuarioUmId, usuarioDoisId])
+  @@index([usuarioUmId, atualizadaEm])
+  @@index([usuarioDoisId, atualizadaEm])
+}
+
+model MensagemPrivada {
+  id          Int       @id @default(autoincrement())
+  conversaId  Int
+  remetenteId Int
+  texto       String
+  criadaEm    DateTime  @default(now())
+  lidaEm      DateTime?
+
+  conversa  ConversaPrivada @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  remetente Usuario         @relation("MensagensEnviadas", fields: [remetenteId], references: [id], onDelete: Cascade)
+
+  @@index([conversaId, id])
+  @@index([remetenteId, lidaEm])
 }
