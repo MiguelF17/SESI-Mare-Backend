@@ -19,6 +19,7 @@ const usu__rioArtistaRoutes_1 = __importDefault(require("./routes/usu\u00E1rioAr
 const musicasRecomendadasRoutes_1 = __importDefault(require("./routes/musicasRecomendadasRoutes"));
 const notificacaoRoutes_1 = __importDefault(require("./routes/notificacaoRoutes"));
 const conversaRoutes_1 = __importDefault(require("./routes/conversaRoutes"));
+const playlistRoutes_1 = __importDefault(require("./routes/playlistRoutes"));
 const app = (0, express_1.default)();
 const origensPermitidas = [
     "https://mare-amber.vercel.app",
@@ -50,6 +51,7 @@ app.use("/", usu__rioArtistaRoutes_1.default);
 app.use("/", usuarioGeneroRoutes_1.default);
 app.use("/", notificacaoRoutes_1.default);
 app.use("/", conversaRoutes_1.default);
+app.use("/", playlistRoutes_1.default);
 const PORT = process.env.PORT || 3000;
 app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`Servidor rodando na porta ${PORT}`);

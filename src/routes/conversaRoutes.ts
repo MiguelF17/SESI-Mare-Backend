@@ -6,6 +6,7 @@ import { AuthRequest, authMiddleware } from "../middleware/authMiddleware";
 const router = Router();
 const tamanhoPagina = 50;
 const marcadorMusica = /^\[\[mare-musica:(\d+)\]\]$/;
+const marcadorPlaylist = /^\[\[mare-playlist:(\d+)\]\]$/;
 
 async function seguemMutuamente(usuarioUmId: number, usuarioDoisId: number) {
   const relacoes = await prisma.seguidor.findMany({
@@ -25,11 +26,22 @@ function idMusicaDaMensagem(texto: string) {
   return resultado ? Number(resultado[1]) : null;
 }
 
+function idPlaylistDaMensagem(texto: string) {
+  const resultado = texto.match(marcadorPlaylist);
+  return resultado ? Number(resultado[1]) : null;
+}
+
 async function incluirMusicasCompartilhadas(mensagens: any[]) {
+  const playlistIds = [...new Set(mensagens.map((m) => idPlaylistDaMensagem(m.texto)).filter((id): id is number => id !== null))];
+  const playlists = playlistIds.length ? await prisma.playlist.findMany({
+    where: { id: { in: playlistIds }, publica: true },
+    include: { usuario: { select: { id: true, nome: true, username: true, foto: true } }, musicas: { orderBy: { posicao: "asc" }, include: { musica: { include: { artista: true } } } } },
+  }) : [];
+  const porPlaylist = new Map(playlists.map((item) => [item.id, item]));
   const ids = [...new Set(mensagens
     .map((mensagem) => idMusicaDaMensagem(mensagem.texto))
     .filter((id): id is number => id !== null))];
-  if (!ids.length) return mensagens.map((mensagem) => ({ ...mensagem, musica: null }));
+  if (!ids.length) return mensagens.map((mensagem) => ({ ...mensagem, musica: null, playlist: porPlaylist.get(idPlaylistDaMensagem(mensagem.texto) ?? -1) ?? null }));
 
   const musicas = await prisma.musica.findMany({
     where: { id: { in: ids } },
@@ -44,7 +56,8 @@ async function incluirMusicasCompartilhadas(mensagens: any[]) {
 
   return mensagens.map((mensagem) => {
     const musicaId = idMusicaDaMensagem(mensagem.texto);
-    return { ...mensagem, musica: musicaId ? porId.get(musicaId) ?? null : null };
+    const playlistId = idPlaylistDaMensagem(mensagem.texto);
+    return { ...mensagem, musica: musicaId ? porId.get(musicaId) ?? null : null, playlist: playlistId ? porPlaylist.get(playlistId) ?? null : null };
   });
 }
 
@@ -327,11 +340,13 @@ router.post("/conversas/:id/mensagens", authMiddleware, async (req: AuthRequest,
     const usuarioId = req.usuarioId!;
     const textoNormal = typeof req.body?.texto === "string" ? req.body.texto.trim() : "";
     const musicaId = req.body?.musicaId == null ? null : Number(req.body.musicaId);
+    const playlistId = req.body?.playlistId == null ? null : Number(req.body.playlistId);
 
     if (!Number.isInteger(conversaId) || conversaId <= 0) {
       return res.status(400).json({ error: "ID de conversa inválido." });
     }
-    if (musicaId === null && !textoNormal) return res.status(400).json({ error: "Escreva uma mensagem." });
+    if (musicaId === null && playlistId === null && !textoNormal) return res.status(400).json({ error: "Escreva uma mensagem." });
+    if (playlistId !== null && (!Number.isSafeInteger(playlistId) || playlistId <= 0)) return res.status(400).json({ error: "Selecione uma playlist válida." });
     if (musicaId !== null && (!Number.isSafeInteger(musicaId) || musicaId <= 0)) {
       return res.status(400).json({ error: "Selecione uma música válida." });
     }
@@ -362,6 +377,7 @@ router.post("/conversas/:id/mensagens", authMiddleware, async (req: AuthRequest,
     }
 
     let musicaCompartilhada = null;
+    let playlistCompartilhada = null;
     if (musicaId !== null) {
       musicaCompartilhada = await prisma.musica.findUnique({
         where: { id: musicaId },
@@ -369,7 +385,11 @@ router.post("/conversas/:id/mensagens", authMiddleware, async (req: AuthRequest,
       });
       if (!musicaCompartilhada) return res.status(404).json({ error: "Música não encontrada." });
     }
-    const texto = musicaId !== null ? `[[mare-musica:${musicaId}]]` : textoNormal;
+    if (playlistId !== null) {
+      playlistCompartilhada = await prisma.playlist.findFirst({ where: { id: playlistId, usuarioId, publica: true }, include: { usuario: { select: { id: true, nome: true, username: true, foto: true } }, musicas: { orderBy: { posicao: "asc" }, include: { musica: { include: { artista: true } } } } } });
+      if (!playlistCompartilhada) return res.status(404).json({ error: "Playlist pública não encontrada." });
+    }
+    const texto = musicaId !== null ? `[[mare-musica:${musicaId}]]` : playlistId !== null ? `[[mare-playlist:${playlistId}]]` : textoNormal;
 
     const [mensagem] = await prisma.$transaction([
       prisma.mensagemPrivada.create({
@@ -385,9 +405,7 @@ router.post("/conversas/:id/mensagens", authMiddleware, async (req: AuthRequest,
     const destinatarioId = usuarioId === conversa.usuarioUmId
       ? conversa.usuarioDoisId
       : conversa.usuarioUmId;
-    const mensagemComMusica = musicaCompartilhada
-      ? { ...mensagem, musica: musicaCompartilhada }
-      : { ...mensagem, musica: null };
+    const mensagemComMusica = { ...mensagem, musica: musicaCompartilhada, playlist: playlistCompartilhada };
     const destinatarioSilenciou = destinatarioId === conversa.usuarioUmId
       ? conversa.silenciadaPorUm
       : conversa.silenciadaPorDois;
@@ -395,6 +413,7 @@ router.post("/conversas/:id/mensagens", authMiddleware, async (req: AuthRequest,
       titulo: `Mensagem de ${mensagem.remetente.nome}`,
       corpo: musicaCompartilhada
         ? `Compartilhou: ${musicaCompartilhada.titulo} — ${musicaCompartilhada.artista.nome}`
+        : playlistCompartilhada ? `Compartilhou a playlist ${playlistCompartilhada.nome}`
         : mensagem.texto,
       imagem: mensagem.remetente.foto,
       categoria: "mare_mensagem",

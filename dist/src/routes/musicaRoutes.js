@@ -62,12 +62,14 @@ router.get("/musicas", async (req, res) => {
                         {
                             titulo: {
                                 contains: search,
+                                mode: "insensitive",
                             },
                         },
                         {
                             artista: {
                                 nome: {
                                     contains: search,
+                                    mode: "insensitive",
                                 },
                             },
                         },

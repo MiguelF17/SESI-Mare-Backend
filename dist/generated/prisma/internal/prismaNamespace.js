@@ -48,7 +48,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.defineExtension = exports.NullsOrder = exports.QueryMode = exports.SortOrder = exports.TokenNotificacaoPushScalarFieldEnum = exports.MensagemPrivadaScalarFieldEnum = exports.ConversaPrivadaScalarFieldEnum = exports.NotificacaoScalarFieldEnum = exports.UsuarioGeneroScalarFieldEnum = exports.UsuarioArtistaScalarFieldEnum = exports.SalvamentoScalarFieldEnum = exports.SeguidorScalarFieldEnum = exports.ComentarioCurtidaScalarFieldEnum = exports.ComentarioScalarFieldEnum = exports.CurtidaScalarFieldEnum = exports.PostScalarFieldEnum = exports.ArtistaScalarFieldEnum = exports.MusicaScalarFieldEnum = exports.UsuarioScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.prismaVersion = exports.getExtensionContext = exports.Decimal = exports.Sql = exports.raw = exports.join = exports.empty = exports.sql = exports.PrismaClientValidationError = exports.PrismaClientInitializationError = exports.PrismaClientRustPanicError = exports.PrismaClientUnknownRequestError = exports.PrismaClientKnownRequestError = void 0;
+exports.defineExtension = exports.NullsOrder = exports.QueryMode = exports.SortOrder = exports.TokenNotificacaoPushScalarFieldEnum = exports.MensagemPrivadaScalarFieldEnum = exports.ConversaPrivadaScalarFieldEnum = exports.NotificacaoScalarFieldEnum = exports.UsuarioGeneroScalarFieldEnum = exports.UsuarioArtistaScalarFieldEnum = exports.PlaylistMusicaScalarFieldEnum = exports.PlaylistScalarFieldEnum = exports.SalvamentoScalarFieldEnum = exports.SeguidorScalarFieldEnum = exports.ComentarioCurtidaScalarFieldEnum = exports.ComentarioScalarFieldEnum = exports.CurtidaScalarFieldEnum = exports.PostScalarFieldEnum = exports.ArtistaScalarFieldEnum = exports.MusicaScalarFieldEnum = exports.UsuarioScalarFieldEnum = exports.TransactionIsolationLevel = exports.ModelName = exports.AnyNull = exports.JsonNull = exports.DbNull = exports.NullTypes = exports.prismaVersion = exports.getExtensionContext = exports.Decimal = exports.Sql = exports.raw = exports.join = exports.empty = exports.sql = exports.PrismaClientValidationError = exports.PrismaClientInitializationError = exports.PrismaClientRustPanicError = exports.PrismaClientUnknownRequestError = exports.PrismaClientKnownRequestError = void 0;
 const runtime = __importStar(require("@prisma/client/runtime/client"));
 /**
  * Prisma Errors
@@ -112,6 +112,8 @@ exports.ModelName = {
     ComentarioCurtida: 'ComentarioCurtida',
     Seguidor: 'Seguidor',
     Salvamento: 'Salvamento',
+    Playlist: 'Playlist',
+    PlaylistMusica: 'PlaylistMusica',
     UsuarioArtista: 'UsuarioArtista',
     UsuarioGenero: 'UsuarioGenero',
     Notificacao: 'Notificacao',
@@ -205,6 +207,21 @@ exports.SalvamentoScalarFieldEnum = {
     usuarioId: 'usuarioId',
     musicaId: 'musicaId',
     dataCriacao: 'dataCriacao'
+};
+exports.PlaylistScalarFieldEnum = {
+    id: 'id',
+    usuarioId: 'usuarioId',
+    nome: 'nome',
+    descricao: 'descricao',
+    publica: 'publica',
+    criadaEm: 'criadaEm',
+    atualizadaEm: 'atualizadaEm'
+};
+exports.PlaylistMusicaScalarFieldEnum = {
+    playlistId: 'playlistId',
+    musicaId: 'musicaId',
+    posicao: 'posicao',
+    adicionadaEm: 'adicionadaEm'
 };
 exports.UsuarioArtistaScalarFieldEnum = {
     usuarioId: 'usuarioId',

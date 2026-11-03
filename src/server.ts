@@ -16,6 +16,7 @@ import usuarioArtistaRoutes from "./routes/usuárioArtistaRoutes";
 import musicasRecomendadasRoutes from "./routes/musicasRecomendadasRoutes";
 import notificacaoRoutes from "./routes/notificacaoRoutes";
 import conversaRoutes from "./routes/conversaRoutes";
+import playlistRoutes from "./routes/playlistRoutes";
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use("/", usuarioArtistaRoutes);
 app.use("/", usuarioGeneroRoutes);
 app.use("/", notificacaoRoutes);
 app.use("/", conversaRoutes);
+app.use("/", playlistRoutes);
 
 const PORT = process.env.PORT || 3000;
 
