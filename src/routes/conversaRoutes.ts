@@ -35,7 +35,7 @@ async function incluirMusicasCompartilhadas(mensagens: any[]) {
   const playlistIds = [...new Set(mensagens.map((m) => idPlaylistDaMensagem(m.texto)).filter((id): id is number => id !== null))];
   const playlists = playlistIds.length ? await prisma.playlist.findMany({
     where: { id: { in: playlistIds }, publica: true },
-    include: { usuario: { select: { id: true, nome: true, username: true, foto: true } }, musicas: { orderBy: { posicao: "asc" }, include: { musica: { include: { artista: true } } } } },
+    include: { usuario: { select: { id: true, nome: true, username: true, foto: true } }, musicas: { orderBy: { posicao: "asc" }, take: 15, include: { musica: { include: { artista: true } } } } },
   }) : [];
   const porPlaylist = new Map(playlists.map((item) => [item.id, item]));
   const ids = [...new Set(mensagens
@@ -386,7 +386,7 @@ router.post("/conversas/:id/mensagens", authMiddleware, async (req: AuthRequest,
       if (!musicaCompartilhada) return res.status(404).json({ error: "Música não encontrada." });
     }
     if (playlistId !== null) {
-      playlistCompartilhada = await prisma.playlist.findFirst({ where: { id: playlistId, usuarioId, publica: true }, include: { usuario: { select: { id: true, nome: true, username: true, foto: true } }, musicas: { orderBy: { posicao: "asc" }, include: { musica: { include: { artista: true } } } } } });
+      playlistCompartilhada = await prisma.playlist.findFirst({ where: { id: playlistId, usuarioId, publica: true }, include: { usuario: { select: { id: true, nome: true, username: true, foto: true } }, musicas: { orderBy: { posicao: "asc" }, take: 15, include: { musica: { include: { artista: true } } } } } });
       if (!playlistCompartilhada) return res.status(404).json({ error: "Playlist pública não encontrada." });
     }
     const texto = musicaId !== null ? `[[mare-musica:${musicaId}]]` : playlistId !== null ? `[[mare-playlist:${playlistId}]]` : textoNormal;

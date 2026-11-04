@@ -99,9 +99,24 @@ router.post("/playlists/:id/musicas", authMiddleware_1.authMiddleware, async (re
         const playlist = await prismaClient_1.default.playlist.findFirst({ where: { id: playlistId, usuarioId: req.usuarioId }, select: { id: true } });
         if (!playlist)
             return res.status(404).json({ error: "Playlist não encontrada ou sem permissão para editar." });
-        const ultima = await prismaClient_1.default.playlistMusica.aggregate({ where: { playlistId }, _max: { posicao: true } });
-        await prismaClient_1.default.playlistMusica.upsert({ where: { playlistId_musicaId: { playlistId, musicaId } }, create: { playlistId, musicaId, posicao: (ultima._max.posicao ?? -1) + 1 }, update: {} });
-        const atualizada = await prismaClient_1.default.playlist.findUnique({ where: { id: playlistId }, include: incluirPlaylist });
+        const atualizada = await prismaClient_1.default.$transaction(async (transacao) => {
+            const existente = await transacao.playlistMusica.findUnique({
+                where: { playlistId_musicaId: { playlistId, musicaId } },
+                select: { musicaId: true },
+            });
+            if (!existente) {
+                const quantidadeAtual = await transacao.playlistMusica.count({ where: { playlistId } });
+                if (quantidadeAtual >= 15)
+                    return null;
+                const ultima = await transacao.playlistMusica.aggregate({ where: { playlistId }, _max: { posicao: true } });
+                await transacao.playlistMusica.create({
+                    data: { playlistId, musicaId, posicao: (ultima._max.posicao ?? -1) + 1 },
+                });
+            }
+            return transacao.playlist.findUnique({ where: { id: playlistId }, include: incluirPlaylist });
+        }, { isolationLevel: "Serializable" });
+        if (!atualizada)
+            return res.status(409).json({ error: "Cada playlist pode ter no máximo 15 músicas." });
         return res.status(201).json(atualizada);
     }
     catch (error) {

@@ -93,6 +93,52 @@ router.patch("/usuarios/me/imagem", authMiddleware_1.authMiddleware, upload.sing
         });
     }
 });
+// Remove a foto ou a capa do próprio perfil, voltando ao visual padrão.
+router.delete("/usuarios/me/imagem", authMiddleware_1.authMiddleware, async (req, res) => {
+    try {
+        const tipoRecebido = req.body?.tipo;
+        if (tipoRecebido !== "foto" && tipoRecebido !== "capa") {
+            return res.status(400).json({ erro: "O tipo deve ser foto ou capa." });
+        }
+        const tipo = tipoRecebido;
+        const usuario = await prismaClient_1.default.usuario.findUnique({
+            where: { id: req.usuarioId },
+            select: { foto: true, capa: true },
+        });
+        if (!usuario) {
+            return res.status(404).json({ erro: "Usuário não encontrado." });
+        }
+        const urlImagem = usuario[tipo];
+        const atualizado = await prismaClient_1.default.usuario.update({
+            where: { id: req.usuarioId },
+            data: { [tipo]: null },
+            select: { foto: true, capa: true },
+        });
+        if (urlImagem) {
+            try {
+                const url = new URL(urlImagem);
+                const caminhoCloudinary = `/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload/`;
+                // Só apaga arquivos do Cloudinary desta conta; fotos antigas podem vir de outros serviços.
+                if (url.hostname === "res.cloudinary.com" && url.pathname.includes(caminhoCloudinary)) {
+                    const caminhoArquivo = url.pathname.split(caminhoCloudinary)[1]?.replace(/^v\d+\//, "");
+                    const publicId = caminhoArquivo?.replace(/\.[^/.]+$/, "");
+                    if (publicId) {
+                        await cloudinary_1.default.uploader.destroy(publicId, { resource_type: "image" });
+                    }
+                }
+            }
+            catch (erroCloudinary) {
+                // A foto já foi removida do perfil; evita falhar se o arquivo antigo não existir.
+                console.warn("Não foi possível limpar o arquivo antigo do Cloudinary:", erroCloudinary);
+            }
+        }
+        return res.json(atualizado);
+    }
+    catch (erro) {
+        console.error("Erro ao remover imagem do perfil:", erro);
+        return res.status(500).json({ erro: "Não foi possível remover a imagem." });
+    }
+});
 // CADASTRAR USUÁRIO
 router.post("/usuarios", async (req, res) => {
     try {
@@ -808,9 +854,12 @@ router.get("/usuarios/me", authMiddleware_1.authMiddleware, async (req, res) => 
 // EXCLUIR MINHA CONTA
 router.delete("/usuarios/me", authMiddleware_1.authMiddleware, async (req, res) => {
     try {
-        await prismaClient_1.default.usuario.delete({
-            where: { id: req.usuarioId },
-        });
+        const usuarioId = req.usuarioId;
+        await prismaClient_1.default.$transaction([
+            // Apaga notificações recebidas por outras pessoas que foram geradas por este usuário.
+            prismaClient_1.default.notificacao.deleteMany({ where: { atorId: usuarioId } }),
+            prismaClient_1.default.usuario.delete({ where: { id: usuarioId } }),
+        ]);
         return res.status(200).json({
             message: "Conta excluída com sucesso.",
         });

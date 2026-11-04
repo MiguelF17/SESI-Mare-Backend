@@ -6,6 +6,8 @@ type DadosPush = {
   dados?: Record<string, string | number>;
   imagem?: string | null;
   categoria?: string;
+  /** Mantém só o alerta mais recente de um mesmo grupo no aparelho. */
+  collapseId?: string;
 };
 
 /** Entrega push sem atrasar nem cancelar a ação principal caso o serviço externo falhe. */
@@ -31,6 +33,14 @@ export async function enviarPushParaUsuario(usuarioId: number, push: DadosPush) 
       channelId: "mare-atividade",
       priority: "high",
       sound: "default",
+      // Mensagens substituem o alerta anterior da mesma conversa. As demais
+      // atividades também são agrupadas por tipo para evitar uma bandeja infinita.
+      collapseId: push.collapseId ?? (push.dados?.tipo === "mensagem" && push.dados.conversaId != null
+        ? `mare-chat-${push.dados.conversaId}`
+        : `mare-atividade-${push.dados?.tipo ?? "geral"}`),
+      tag: push.collapseId ?? (push.dados?.tipo === "mensagem" && push.dados.conversaId != null
+        ? `mare-chat-${push.dados.conversaId}`
+        : `mare-atividade-${push.dados?.tipo ?? "geral"}`),
       ...(push.imagem ? { richContent: { image: push.imagem } } : {}),
       ...(push.categoria ? { categoryId: push.categoria } : {}),
     }));
