@@ -11,6 +11,10 @@ export interface ErroValidacao {
   mensagem: string;
 }
 
+export const LIMITE_USERNAME = 15;
+export const LIMITE_NOME_PERFIL = 50;
+export const FORMATO_USERNAME = /^[a-zA-Z0-9_]{3,15}$/;
+
 export function validarCadastro(
   dados: DadosCadastro,
 ): ErroValidacao[] {
@@ -26,11 +30,10 @@ export function validarCadastro(
       campo: "username",
       mensagem: "Informe um nome de usuário.",
     });
-  } else if (!/^[a-zA-Z0-9._]{3,20}$/.test(username)) {
+  } else if (!FORMATO_USERNAME.test(username)) {
     erros.push({
       campo: "username",
-      mensagem:
-        "O usuário deve ter de 3 a 20 caracteres, usando apenas letras, números, pontos e sublinhados.",
+      mensagem: "O usuário deve ter de 3 a 15 caracteres, usando apenas letras, números e sublinhado (_), sem espaços.",
     });
   }
 

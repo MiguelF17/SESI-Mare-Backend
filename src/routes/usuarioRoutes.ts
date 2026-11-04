@@ -11,6 +11,7 @@ import multer from "multer";
 import cloudinary from "../cloudinary";
 import { createHash, randomBytes } from "crypto";
 import { enviarEmailRedefinicaoSenha, enviarEmailVerificacao } from "../services/emailService";
+import { FORMATO_USERNAME, LIMITE_NOME_PERFIL } from "../utils/validarCadastro";
 
 const router = Router();
 
@@ -198,6 +199,12 @@ router.post("/usuarios", async (req: Request, res: Response) => {
 
         const usernameNormalizado = username.trim().toLowerCase();
         const emailNormalizado = email.trim().toLowerCase();
+
+        if (!FORMATO_USERNAME.test(usernameNormalizado)) {
+            return res.status(400).json({
+                error: "O usuário deve ter de 3 a 15 caracteres, usando apenas letras, números e sublinhado (_), sem espaços.",
+            });
+        }
 
         const usuarioExistente = await prisma.usuario.findFirst({
             where: {
@@ -1058,17 +1065,38 @@ router.put(
 
       const { nome, username, bio, foto, capa } = req.body;
 
-      if (username !== undefined && !username.trim()) {
-        return res.status(400).json({
-          error: "O username não pode ficar vazio",
-        });
+      if (nome !== undefined) {
+        if (typeof nome !== "string" || !nome.trim() || nome.trim().length > LIMITE_NOME_PERFIL) {
+          return res.status(400).json({
+            error: `O nome deve ter entre 1 e ${LIMITE_NOME_PERFIL} caracteres.`,
+          });
+        }
       }
 
-      // Verifica se o novo username já pertence a outra pessoa
+      let usernameNormalizado: string | undefined;
+
       if (username !== undefined) {
+        if (typeof username !== "string" || !username.trim()) {
+          return res.status(400).json({ error: "Informe um nome de usuário." });
+        }
+
+        usernameNormalizado = username.trim().toLowerCase();
+        const atual = await prisma.usuario.findUnique({
+          where: { id: usuarioId },
+          select: { username: true },
+        });
+        const mantendoUsernameAntigo = usernameNormalizado === atual?.username?.toLowerCase();
+
+        // Mantém contas antigas editáveis; usernames novos seguem a regra atual.
+        if (!FORMATO_USERNAME.test(usernameNormalizado) && !mantendoUsernameAntigo) {
+          return res.status(400).json({
+            error: "O usuário deve ter de 3 a 15 caracteres, usando apenas letras, números e sublinhado (_), sem espaços.",
+          });
+        }
+
         const usernameExistente = await prisma.usuario.findFirst({
           where: {
-            username: username.trim().toLowerCase(),
+            username: usernameNormalizado,
             NOT: {
               id: usuarioId,
             },
@@ -1093,7 +1121,7 @@ router.put(
           }),
 
           ...(username !== undefined && {
-            username: username.trim().toLowerCase(),
+            username: usernameNormalizado,
           }),
 
           ...(bio !== undefined && {
