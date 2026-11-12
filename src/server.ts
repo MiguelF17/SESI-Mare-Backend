@@ -21,8 +21,11 @@ import playlistRoutes from "./routes/playlistRoutes";
 const app = express();
 
 const origensPermitidas = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
   "https://mare-amber.vercel.app",
   "https://mare-git-miguel-miguelfrancellino1705-3124.vercel.app",
+  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL.replace(/\/$/, "")] : []),
 ];
 
 app.use(

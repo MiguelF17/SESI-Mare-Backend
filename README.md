@@ -1,132 +1,64 @@
-# 🌊 Maré — Backend
+<p align="center"><img src="assets/logo.png" alt="Logo da Maré" width="116"></p>
 
-**A API responsável por conectar pessoas através da música.**
+<h1 align="center">API da Maré</h1>
 
-O Maré é uma plataforma social desenvolvida como Trabalho de Conclusão de Curso (TCC), com o objetivo de proporcionar um espaço onde usuários possam compartilhar suas experiências musicais, avaliar músicas, publicar opiniões e descobrir novos artistas.
+<p align="center"><strong>As regras e os dados por trás da experiência musical.</strong></p>
 
-Este repositório contém o backend da aplicação, responsável pelo gerenciamento de dados, autenticação, regras de negócio e comunicação com os clientes web e mobile.
+<p align="center">
+  <img src="https://img.shields.io/badge/Node.js-182638?logo=nodedotjs&logoColor=58AAF0" alt="Node.js">
+  <img src="https://img.shields.io/badge/Express-182638?logo=express&logoColor=58AAF0" alt="Express">
+  <img src="https://img.shields.io/badge/PostgreSQL-182638?logo=postgresql&logoColor=58AAF0" alt="PostgreSQL">
+</p>
 
-## 🛠️ Tecnologias
+O backend atende a web e o aplicativo mobile. Ele valida as operações, autentica usuários e grava os dados compartilhados entre as duas interfaces.
 
-- **Node.js** — Ambiente de execução.
-- **Express** — Framework para construção da API.
-- **TypeScript** — Tipagem estática.
-- **Prisma ORM** — Comunicação provisória com o banco de dados.
-- **SQLite** — Banco de dados provisório.
-- **Supabase** — Banco de dados.
-- **Render** — Comunicação com o banco de dados
-- **JWT** — Autenticação e gerenciamento de sessões.
-- **Bcrypt** — Criptografia de senhas.
-- **Cloudinary** — Armazenamento de imagens.
-- **Multer** — Processamento de uploads.
-- **Brevo** — Envio de e-mails.
+## O que passa pela API
 
-## ✨ Funcionalidades
+Contas, publicações, comentários, músicas, preferências, seguidores, salvamentos, playlists, notificações e conversas privadas. O servidor também escolhe recomendações, prepara estatísticas pessoais e coordena os serviços externos de e-mail, imagem e notificações push.
 
-- Cadastro e autenticação de usuários.
-- Verificação de e-mail.
-- Gerenciamento de perfis.
-- Upload de fotos de perfil e capas.
-- Criação, edição e exclusão de publicações.
-- Avaliações musicais com notas de 1 a 5, incluindo intervalos de 0,5.
-- Curtidas e comentários.
-- Sistema de seguidores.
-- Salvamento de músicas.
-- Recomendações musicais.
-- Pesquisa de usuários, músicas e publicações.
-- Sistema de notificações.
-- Denúncias de publicações.
+## Começando
 
-## 📁 Estrutura do projeto
-
-```text
-backend/
-├── prisma/
-│   └── schema.prisma
-├── src/
-│   ├── config/
-│   ├── controllers/
-│   ├── middlewares/
-│   ├── routes/
-│   ├── services/
-│   ├── utils/
-│   └── server.ts
-├── .env
-├── .env.example
-├── package.json
-└── tsconfig.json
-```
-
-*A estrutura pode variar conforme a organização atual do projeto.*
-
-## ⚙️ Como executar
-
-### 1. Clone o repositório
-
-```bash
-git clone URL_DO_REPOSITORIO
-cd nome-do-repositorio
-```
-
-### 2. Instale as dependências
-
-```bash
-npm install
-```
-
-### 3. Configure as variáveis de ambiente
-
-Crie um arquivo `.env` na raiz do projeto:
+Requer Node.js e um banco PostgreSQL acessível. Instale as dependências com `npm install` e crie um `.env` neste diretório:
 
 ```env
-DATABASE_URL="file:./dev.db"
-
-JWT_SECRET="sua_chave_secreta"
-
+DATABASE_URL=postgresql://usuario:senha@localhost:5432/mare
+JWT_SECRET=troque-por-uma-chave-longa-e-aleatoria
 PORT=3000
-
-FRONTEND_URL="http://localhost:5173"
-
-CLOUDINARY_CLOUD_NAME=""
-CLOUDINARY_API_KEY=""
-CLOUDINARY_API_SECRET=""
-
-BREVO_API_KEY=""
-EMAIL_FROM=""
+FRONTEND_URL=http://localhost:5173
+BREVO_API_KEY=
+EMAIL_REMETENTE=
+LOGO_URL=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
 ```
 
-Preencha as credenciais necessárias para os serviços utilizados.
-
-### 4. Configure o banco de dados
+Brevo envia os e-mails de conta. Cloudinary guarda as imagens enviadas. `LOGO_URL` aponta para uma imagem pública incluída nos e-mails. Nunca publique o `.env`.
 
 ```bash
 npx prisma generate
-npx prisma db push
-```
-
-### 5. Inicie o servidor
-
-```bash
+npx prisma migrate deploy
 npm run dev
 ```
 
-A API estará disponível no endereço configurado na variável `PORT`.
+Para produção, use `npm run build` e `npm start`.
 
-## 🔗 Integração
+## Mapa do código
 
-O backend funciona como camada central de comunicação entre:
+| Caminho | Responsabilidade |
+| --- | --- |
+| `src/server.ts` | Express, CORS e registro das rotas |
+| `src/routes` | Endpoints e regras de cada recurso |
+| `src/middleware` | Autenticação por JWT |
+| `src/services` | E-mails e notificações push |
+| `src/cloudinary.ts` | Configuração das imagens |
+| `prisma/schema.prisma` | Modelos e relações do banco |
+| `prisma/migrations` | Evolução do esquema PostgreSQL |
 
-- **Maré Web:** interface acessada pelo navegador.
-- **Maré Mobile:** aplicação desenvolvida com React Native e Expo.
+Express recebe as requisições; Prisma acessa o PostgreSQL; JWT identifica a sessão e bcryptjs verifica as senhas. O serviço de push envia notificações ao Expo.
 
-Ambos consomem os endpoints da API para acessar os mesmos dados e funcionalidades.
+O arquivo `dev.db` e `prisma/migrations_sqlite_backup` são vestígios de uma versão antiga em SQLite. O esquema ativo usa PostgreSQL. A localização do banco e a hospedagem da API dependem da implantação. Veja o [guia do projeto](../docs/guia-do-projeto.md).
 
-## 🔒 Segurança
+## Para conferir uma alteração
 
-O projeto utiliza autenticação JWT, hash de senhas, middlewares de proteção e validações para controlar o acesso aos recursos da aplicação.
-
-**Observação:** nunca compartilhe seu arquivo `.env` ou credenciais de serviços externos.
-
----
-
-Desenvolvido como parte do projeto acadêmico **Maré — TCC**.
+Use `npm run build` para verificar o TypeScript. Testes de integração exigem um PostgreSQL configurado; envios de e-mail, imagem e push exigem as credenciais dos respectivos serviços.
