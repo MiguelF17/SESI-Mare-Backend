@@ -431,7 +431,7 @@ router.patch("/usuarios/me/senha", authMiddleware, async (req: AuthRequest, res:
   }
 });
 
-// REENVIAR E-MAIL DE VERIFICAÇÃO 
+// REENVIAR E-MAIL DE VERIFICAÇÃO
 
 router.post(
     "/usuarios/reenviar-verificacao",
