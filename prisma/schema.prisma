@@ -92,6 +92,7 @@ model Post {
   musica  Musica  @relation(fields: [musicaId], references: [id])
 
   @@unique([usuarioId, musicaId])
+  @@index([musicaId])
 }
 
 model Curtida {
@@ -219,6 +220,8 @@ model Notificacao {
   ator Usuario? @relation("NotificacoesEnviadas", fields: [atorId], references: [id])
 
   @@index([usuarioId, lida, criadaEm])
+  @@index([usuarioId, id])
+  @@index([usuarioId, lida, id])
   @@index([comentarioId])
 }
 

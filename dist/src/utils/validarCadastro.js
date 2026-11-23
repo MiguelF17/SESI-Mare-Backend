@@ -1,6 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.FORMATO_USERNAME = exports.LIMITE_NOME_PERFIL = exports.LIMITE_USERNAME = void 0;
 exports.validarCadastro = validarCadastro;
+exports.LIMITE_USERNAME = 15;
+exports.LIMITE_NOME_PERFIL = 50;
+exports.FORMATO_USERNAME = /^[a-zA-Z0-9_]{3,15}$/;
 function validarCadastro(dados) {
     const erros = [];
     const username = dados.username.trim().toLowerCase();
@@ -13,10 +17,10 @@ function validarCadastro(dados) {
             mensagem: "Informe um nome de usuário.",
         });
     }
-    else if (!/^[a-zA-Z0-9._]{3,20}$/.test(username)) {
+    else if (!exports.FORMATO_USERNAME.test(username)) {
         erros.push({
             campo: "username",
-            mensagem: "O usuário deve ter de 3 a 20 caracteres, usando apenas letras, números, pontos e sublinhados.",
+            mensagem: "O usuário deve ter de 3 a 15 caracteres, usando apenas letras, números e sublinhado (_), sem espaços.",
         });
     }
     if (!email) {

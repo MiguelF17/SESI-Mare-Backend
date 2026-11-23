@@ -51,6 +51,25 @@ router.post("/musicas", async (req, res) => {
         });
     }
 });
+router.get("/musicas/vitrine", async (_req, res) => {
+    try {
+        const musicas = await prismaClient_1.default.musica.findMany({
+            take: 10,
+            orderBy: { id: "asc" },
+            select: {
+                id: true,
+                titulo: true,
+                capa: true,
+                artista: { select: { nome: true } },
+            },
+        });
+        return res.json(musicas);
+    }
+    catch (error) {
+        console.error("Erro ao carregar a vitrine de músicas:", error);
+        return res.status(500).json({ error: "Não foi possível carregar a vitrine de músicas." });
+    }
+});
 // Buscar músicas
 router.get("/musicas", async (req, res) => {
     try {
@@ -79,26 +98,19 @@ router.get("/musicas", async (req, res) => {
             // A busca usada pelo seletor do chat é limitada; a listagem do catálogo segue completa.
             take: search ? 30 : undefined,
             orderBy: search ? { titulo: "asc" } : undefined,
-            include: {
-                artista: true,
-                _count: {
-                    select: {
-                        posts: true,
-                    },
-                },
-                posts: {
-                    select: {
-                        nota: true,
-                    },
-                },
-            },
+            include: { artista: true },
         });
+        const avaliacoes = musicas.length ? await prismaClient_1.default.post.groupBy({
+            by: ["musicaId"],
+            where: search ? { musicaId: { in: musicas.map(({ id }) => id) } } : undefined,
+            _avg: { nota: true },
+            _count: { _all: true },
+        }) : [];
+        const avaliacoesPorMusica = new Map(avaliacoes.map((item) => [item.musicaId, item]));
         const musicasFormatadas = musicas.map((musica) => {
-            const quantidadeAvaliacoes = musica.posts.length;
-            const media = quantidadeAvaliacoes > 0
-                ? musica.posts.reduce((total, post) => total + post.nota, 0) /
-                    quantidadeAvaliacoes
-                : 0;
+            const resumo = avaliacoesPorMusica.get(musica.id);
+            const media = resumo?._avg.nota ?? 0;
+            const quantidadeAvaliacoes = resumo?._count._all ?? 0;
             return {
                 id: musica.id,
                 titulo: musica.titulo,

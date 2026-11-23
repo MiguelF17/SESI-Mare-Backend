@@ -79,86 +79,73 @@ router.delete("/notificacoes/push-token", authMiddleware_1.authMiddleware, async
 router.get("/notificacoes", authMiddleware_1.authMiddleware, async (req, res) => {
     try {
         const usuarioId = req.usuarioId;
-        const notificacoes = await prismaClient_1.default.notificacao.findMany({
-            where: { usuarioId },
-            include: {
-                ator: {
-                    select: {
-                        id: true,
-                        nome: true,
-                        username: true,
-                        foto: true,
-                    },
+        const paginar = req.query.pagina === "true";
+        const antes = req.query.antes;
+        const idAnterior = typeof antes === "string" && /^\d+$/.test(antes)
+            ? Number(antes)
+            : undefined;
+        if (paginar && antes !== undefined &&
+            (!idAnterior || idAnterior > 2147483647)) {
+            return res.status(400).json({ erro: "Cursor de notificações inválido." });
+        }
+        const tamanhoPagina = 20;
+        const where = {
+            usuarioId,
+            ...(paginar && req.query.naoLidas === "true" ? { lida: false } : {}),
+            ...(paginar && idAnterior !== undefined ? { id: { lt: idAnterior } } : {}),
+        };
+        const [notificacoes, quantidadeNaoLidas] = await Promise.all([
+            prismaClient_1.default.notificacao.findMany({
+                where,
+                include: {
+                    ator: { select: { id: true, nome: true, username: true, foto: true } },
                 },
-            },
-            orderBy: {
-                criadaEm: "desc",
-            },
-        });
-        const resultado = await Promise.all(notificacoes.map(async (notificacao) => {
-            let postDetalhes = null;
+                orderBy: paginar ? { id: "desc" } : { criadaEm: "desc" },
+                take: paginar ? tamanhoPagina + 1 : undefined,
+            }),
+            paginar ? prismaClient_1.default.notificacao.count({ where: { usuarioId, lida: false } }) : null,
+        ]);
+        const pagina = paginar ? notificacoes.slice(0, tamanhoPagina) : notificacoes;
+        const idsPosts = [...new Set(pagina.flatMap(({ postId }) => postId ? [postId] : []))];
+        const idsComentarios = [...new Set(pagina.flatMap(({ comentarioId, tipo }) => comentarioId && (tipo === "comentario" || tipo === "mencao") ? [comentarioId] : []))];
+        const [posts, comentarios] = await Promise.all([
+            idsPosts.length ? prismaClient_1.default.post.findMany({
+                where: { id: { in: idsPosts } },
+                select: {
+                    id: true, texto: true, nota: true, editado: true,
+                    musica: {
+                        select: {
+                            id: true, titulo: true, capa: true,
+                            artista: { select: { nome: true } },
+                        },
+                    },
+                    usuario: { select: { id: true, nome: true, username: true, foto: true } },
+                },
+            }) : [],
+            idsComentarios.length ? prismaClient_1.default.comentario.findMany({
+                where: { id: { in: idsComentarios } },
+                select: { id: true, texto: true },
+            }) : [],
+        ]);
+        const postsPorId = new Map(posts.map((post) => [post.id, post]));
+        const comentariosPorId = new Map(comentarios.map((comentario) => [comentario.id, comentario]));
+        const resultado = await Promise.all(pagina.map(async (notificacao) => {
+            const post = postsPorId.get(notificacao.postId ?? 0) ?? null;
             let textoComentario = null;
-            if (notificacao.postId) {
-                postDetalhes = await prismaClient_1.default.post.findUnique({
-                    where: {
-                        id: notificacao.postId,
-                    },
-                    select: {
-                        id: true,
-                        texto: true,
-                        nota: true,
-                        editado: true,
-                        musica: {
-                            select: {
-                                id: true,
-                                titulo: true,
-                                capa: true,
-                                artista: {
-                                    select: {
-                                        nome: true,
-                                    },
-                                },
-                            },
+            if (notificacao.postId && notificacao.atorId &&
+                (notificacao.tipo === "comentario" || notificacao.tipo === "mencao")) {
+                const instante = notificacao.criadaEm.getTime();
+                const comentario = comentariosPorId.get(notificacao.comentarioId ?? 0) ??
+                    await prismaClient_1.default.comentario.findFirst({
+                        where: {
+                            postId: notificacao.postId,
+                            usuarioId: notificacao.atorId,
+                            dataCriacao: { gte: new Date(instante - 5000), lte: new Date(instante + 5000) },
                         },
-                        usuario: {
-                            select: {
-                                id: true,
-                                nome: true,
-                                username: true,
-                                foto: true,
-                            },
-                        },
-                    },
-                });
-                if ((notificacao.tipo === "comentario" || notificacao.tipo === "mencao") &&
-                    notificacao.atorId) {
-                    const comentario = notificacao.comentarioId
-                        ? await prismaClient_1.default.comentario.findUnique({
-                            where: { id: notificacao.comentarioId },
-                            select: { texto: true },
-                        })
-                        : null;
-                    const inicio = new Date(notificacao.criadaEm.getTime() - 5000);
-                    const fim = new Date(notificacao.criadaEm.getTime() + 5000);
-                    const comentarioLegado = comentario ??
-                        await prismaClient_1.default.comentario.findFirst({
-                            where: {
-                                postId: notificacao.postId,
-                                usuarioId: notificacao.atorId,
-                                dataCriacao: {
-                                    gte: inicio,
-                                    lte: fim,
-                                },
-                            },
-                            orderBy: {
-                                dataCriacao: "desc",
-                            },
-                            select: {
-                                texto: true,
-                            },
-                        });
-                    textoComentario = comentarioLegado?.texto ?? null;
-                }
+                        orderBy: { dataCriacao: "desc" },
+                        select: { texto: true },
+                    });
+                textoComentario = comentario?.texto ?? null;
             }
             return {
                 id: notificacao.id,
@@ -171,11 +158,15 @@ router.get("/notificacoes", authMiddleware_1.authMiddleware, async (req, res) =>
                 postId: notificacao.postId,
                 musicaId: notificacao.musicaId,
                 textoComentario,
-                post: postDetalhes,
-                musica: postDetalhes?.musica ?? null,
+                post,
+                musica: post?.musica ?? null,
             };
         }));
-        return res.json(resultado);
+        return res.json(paginar ? {
+            itens: resultado,
+            proximoCursor: notificacoes.length > tamanhoPagina ? pagina[pagina.length - 1].id : null,
+            quantidadeNaoLidas,
+        } : resultado);
     }
     catch (error) {
         console.error("Erro ao buscar notificações:", error);

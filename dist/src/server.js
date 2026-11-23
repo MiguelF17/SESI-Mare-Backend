@@ -22,8 +22,11 @@ const conversaRoutes_1 = __importDefault(require("./routes/conversaRoutes"));
 const playlistRoutes_1 = __importDefault(require("./routes/playlistRoutes"));
 const app = (0, express_1.default)();
 const origensPermitidas = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "https://mare-amber.vercel.app",
     "https://mare-git-miguel-miguelfrancellino1705-3124.vercel.app",
+    ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL.replace(/\/$/, "")] : []),
 ];
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {

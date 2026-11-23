@@ -27,6 +27,14 @@ async function enviarPushParaUsuario(usuarioId, push) {
             channelId: "mare-atividade",
             priority: "high",
             sound: "default",
+            // Mensagens substituem o alerta anterior da mesma conversa. As demais
+            // atividades também são agrupadas por tipo para evitar uma bandeja infinita.
+            collapseId: push.collapseId ?? (push.dados?.tipo === "mensagem" && push.dados.conversaId != null
+                ? `mare-chat-${push.dados.conversaId}`
+                : `mare-atividade-${push.dados?.tipo ?? "geral"}`),
+            tag: push.collapseId ?? (push.dados?.tipo === "mensagem" && push.dados.conversaId != null
+                ? `mare-chat-${push.dados.conversaId}`
+                : `mare-atividade-${push.dados?.tipo ?? "geral"}`),
             ...(push.imagem ? { richContent: { image: push.imagem } } : {}),
             ...(push.categoria ? { categoryId: push.categoria } : {}),
         }));

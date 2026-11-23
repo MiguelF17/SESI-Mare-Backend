@@ -12,6 +12,7 @@ const multer_1 = __importDefault(require("multer"));
 const cloudinary_1 = __importDefault(require("../cloudinary"));
 const crypto_1 = require("crypto");
 const emailService_1 = require("../services/emailService");
+const validarCadastro_1 = require("../utils/validarCadastro");
 const router = (0, express_1.Router)();
 async function gerarNomeUsuario() {
     let nome = "";
@@ -155,6 +156,11 @@ router.post("/usuarios", async (req, res) => {
         }
         const usernameNormalizado = username.trim().toLowerCase();
         const emailNormalizado = email.trim().toLowerCase();
+        if (!validarCadastro_1.FORMATO_USERNAME.test(usernameNormalizado)) {
+            return res.status(400).json({
+                error: "O usuário deve ter de 3 a 15 caracteres, usando apenas letras, números e sublinhado (_), sem espaços.",
+            });
+        }
         const usuarioExistente = await prismaClient_1.default.usuario.findFirst({
             where: {
                 OR: [
@@ -352,7 +358,7 @@ router.patch("/usuarios/me/senha", authMiddleware_1.authMiddleware, async (req, 
         return res.status(500).json({ error: "Não foi possível alterar a senha." });
     }
 });
-// REENVIAR E-MAIL DE VERIFICAÇÃO 
+// REENVIAR E-MAIL DE VERIFICAÇÃO
 router.post("/usuarios/reenviar-verificacao", async (req, res) => {
     try {
         const identificador = req.body.login ??
@@ -876,16 +882,33 @@ router.put("/usuarios/me", authMiddleware_1.authMiddleware, async (req, res) => 
     try {
         const usuarioId = req.usuarioId;
         const { nome, username, bio, foto, capa } = req.body;
-        if (username !== undefined && !username.trim()) {
-            return res.status(400).json({
-                error: "O username não pode ficar vazio",
-            });
+        if (nome !== undefined) {
+            if (typeof nome !== "string" || !nome.trim() || nome.trim().length > validarCadastro_1.LIMITE_NOME_PERFIL) {
+                return res.status(400).json({
+                    error: `O nome deve ter entre 1 e ${validarCadastro_1.LIMITE_NOME_PERFIL} caracteres.`,
+                });
+            }
         }
-        // Verifica se o novo username já pertence a outra pessoa
+        let usernameNormalizado;
         if (username !== undefined) {
+            if (typeof username !== "string" || !username.trim()) {
+                return res.status(400).json({ error: "Informe um nome de usuário." });
+            }
+            usernameNormalizado = username.trim().toLowerCase();
+            const atual = await prismaClient_1.default.usuario.findUnique({
+                where: { id: usuarioId },
+                select: { username: true },
+            });
+            const mantendoUsernameAntigo = usernameNormalizado === atual?.username?.toLowerCase();
+            // Mantém contas antigas editáveis; usernames novos seguem a regra atual.
+            if (!validarCadastro_1.FORMATO_USERNAME.test(usernameNormalizado) && !mantendoUsernameAntigo) {
+                return res.status(400).json({
+                    error: "O usuário deve ter de 3 a 15 caracteres, usando apenas letras, números e sublinhado (_), sem espaços.",
+                });
+            }
             const usernameExistente = await prismaClient_1.default.usuario.findFirst({
                 where: {
-                    username: username.trim().toLowerCase(),
+                    username: usernameNormalizado,
                     NOT: {
                         id: usuarioId,
                     },
@@ -906,7 +929,7 @@ router.put("/usuarios/me", authMiddleware_1.authMiddleware, async (req, res) => 
                     nome: nome.trim(),
                 }),
                 ...(username !== undefined && {
-                    username: username.trim().toLowerCase(),
+                    username: usernameNormalizado,
                 }),
                 ...(bio !== undefined && {
                     bio: bio.trim(),
